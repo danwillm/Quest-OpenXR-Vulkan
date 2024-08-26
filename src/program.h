@@ -17,15 +17,17 @@ struct SwapchainInfo {
 
     uint32_t un_image_count = 0;
     std::vector<XrSwapchainImageVulkan2KHR> v_images;
+    std::vector<VkImageView> v_image_views;
+
+    VkFormat vk_format;
 
     uint32_t un_width = 0;
     uint32_t un_height = 0;
 };
 
-class Program
-{
+class Program {
 public:
-    Program( android_app* p_app, app_state* p_app_state );
+    Program(android_app *p_app, app_state *p_app_state);
 
     bool BInit();
 
@@ -34,12 +36,13 @@ public:
     ~Program();
 
 private:
-    android_app* mp_android_app;
-    app_state* mp_app_state;
+    android_app *mp_android_app;
+    app_state *mp_app_state;
 
     XrInstance mxr_instance;
     XrSystemId mxr_system_id;
     XrSession mxr_session;
+    bool mb_session_running = false;
 
     XrViewConfigurationType me_app_view_type;
     std::vector<XrViewConfigurationView> mv_view_config_views;
@@ -54,12 +57,17 @@ private:
     VkPhysicalDevice mvk_physical_device;
     VkDevice mvk_device;
     VkQueue mvk_queue;
+    VkPipelineLayout mvk_pipeline_layout;
+
+    std::vector<VkViewport> vvk_viewports{};
+
     uint32_t mvkindex_queue_family;
     VkDebugUtilsMessengerEXT mvk_debug_utils_messenger;
 
-    PFN_vkCreateDebugUtilsMessengerEXT vkCreateDebugUtilsMessengerEXT{nullptr};
-    PFN_vkDestroyDebugUtilsMessengerEXT vkDestroyDebugUtilsMessengerEXT{nullptr};
+    PFN_vkCreateDebugUtilsMessengerEXT vkCreateDebugUtilsMessengerEXT;
+    PFN_vkDestroyDebugUtilsMessengerEXT vkDestroyDebugUtilsMessengerEXT;
 
+    PFN_xrInitializeLoaderKHR xrInitializeLoaderKHR;
     PFN_xrCreateDebugUtilsMessengerEXT xrCreateDebugUtilsMessengerEXT;
     PFN_xrGetVulkanGraphicsRequirements2KHR xrGetVulkanGraphicsRequirements2KHR;
     PFN_xrCreateVulkanInstanceKHR xrCreateVulkanInstanceKHR;

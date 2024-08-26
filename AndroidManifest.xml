@@ -4,6 +4,19 @@
     android:installLocation="auto"
     android:versionCode="1"
     android:versionName="1.0">
+
+    <uses-feature
+        android:name="android.hardware.vr.headtracking"
+        android:required="true"
+        android:version="1" />
+
+    <meta-data
+        android:name="com.oculus.intent.category.VR"
+        android:value="vr_only"/>
+    <meta-data
+        android:name="com.oculus.supportedDevices"
+        android:value="quest|quest2|questpro"/>
+
     <application
         android:allowBackup="true"
         android:hardwareAccelerated="true"
@@ -27,6 +40,9 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+
+                <category android:name="com.oculus.intent.category.VR" />
+                <category android:name="org.khronos.openxr.intent.category.IMMERSIVE_HMD" />
             </intent-filter>
         </activity>
     </application>

@@ -80,10 +80,18 @@ void android_main(struct android_app *app) {
     JavaVM *java_vm = app->activity->vm;
     java_vm->AttachCurrentThread(&Env, nullptr);
 
+    g_app = app;
+
     app->userData = nullptr;
     app->onAppCmd = app_handle_cmd;
 
     Program program = Program(g_app, &g_app_state);
+
+    if (!program.BInit()) {
+        Log(LogError, "[android_main] Failed to initialize openxr program. Aborting.");
+
+        goto finish;
+    }
 
     g_app_state.b_app_running = true;
 
@@ -92,8 +100,7 @@ void android_main(struct android_app *app) {
             int events;
             struct android_poll_source *source;
 
-            const int n_ms_timeout = (!g_app_state.b_app_running &&
-                                             app->destroyRequested == 0) ? -1 : 0;
+            const int n_ms_timeout = (!g_app_state.b_app_running && app->destroyRequested == 0) ? -1 : 0;
             if (ALooper_pollAll(n_ms_timeout, nullptr, &events, (void **) &source) < 0) {
                 break;
             }
@@ -106,6 +113,7 @@ void android_main(struct android_app *app) {
         program.Tick();
     }
 
+    finish:
     ANativeActivity_finish(app->activity);
     java_vm->DetachCurrentThread();
 }
