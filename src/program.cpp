@@ -476,17 +476,11 @@ bool Program::BInit() {
                 VK_FORMAT_B8G8R8A8_UNORM,
                 VK_FORMAT_R8G8B8A8_UNORM
         };
-        const std::vector<VkFormat> vvk_depth_formats = {
-                VK_FORMAT_D32_SFLOAT,
-                VK_FORMAT_D16_UNORM
-        };
 
         int64_t l_supported_color_format = GetSupportedSwapchainFormat(vvk_color_formats,
                                                                        v_swapchain_formats);
-        int64_t l_supported_depth_format = GetSupportedSwapchainFormat(vvk_color_formats,
-                                                                       v_swapchain_formats);
 
-        if (l_supported_color_format == 0 || l_supported_depth_format == 0) {
+        if (l_supported_color_format == 0) {
             throw std::runtime_error(
                     "[XrProgram] No supported swapchain format for depth or color was supported!");
         }
@@ -551,56 +545,6 @@ bool Program::BInit() {
                                                &mv_sccolor[i].v_image_views[k]));
             }
         }
-
-//        {//Depth swapchain
-//            XrSwapchainCreateInfo xr_swapchain_depth_create_info = {
-//                    .type = XR_TYPE_SWAPCHAIN_CREATE_INFO,
-//                    .createFlags = 0,
-//                    .usageFlags = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-//                    .format = l_supported_depth_format,
-//                    .sampleCount = mv_view_config_views.front().recommendedSwapchainSampleCount,
-//                    .width = mv_view_config_views.front().recommendedImageRectWidth, //assume same
-//                    .height = mv_view_config_views.front().recommendedImageRectHeight,
-//                    .faceCount = 1,
-//                    .arraySize = static_cast<uint32_t>(mv_view_config_views.size()),
-//                    .mipCount = 1,
-//            };
-//            b_qualify_xr(xrCreateSwapchain(mh_xrsession, &xr_swapchain_depth_create_info, &msc_depth.swapchain));
-//
-//            uint32_t un_swapchain_image_count;
-//            b_qualify_xr(xrEnumerateSwapchainImages(msc_depth.swapchain, 0, &un_swapchain_image_count, nullptr));
-//
-//            auto &swapchain_images = msc_depth.v_images;
-//            swapchain_images.resize(un_swapchain_image_count, {XR_TYPE_SWAPCHAIN_IMAGE_VULKAN2_KHR});
-//            b_qualify_xr(xrEnumerateSwapchainImages(msc_depth.swapchain, swapchain_images.size(), &un_swapchain_image_count,
-//                                                    reinterpret_cast<XrSwapchainImageBaseHeader *>(swapchain_images.data())));
-//
-//            msc_depth.vk_format = static_cast<VkFormat>(l_supported_depth_format);
-//
-//            msc_depth.v_image_views.resize(msc_depth.v_images.size());
-//            for (uint32_t i = 0; i < msc_depth.v_images.size(); i++) {
-//                VkImageViewCreateInfo vk_image_view_create_info = {
-//                        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-//                        .image = msc_depth.v_images[i].image,
-//                        .viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY,
-//                        .format = msc_depth.vk_format,
-//                        .components = {
-//                                .r = VK_COMPONENT_SWIZZLE_R,
-//                                .g = VK_COMPONENT_SWIZZLE_G,
-//                                .b = VK_COMPONENT_SWIZZLE_B,
-//                                .a = VK_COMPONENT_SWIZZLE_A
-//                        },
-//                        .subresourceRange = {
-//                                .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-//                                .baseMipLevel = 0,
-//                                .levelCount = 1,
-//                                .baseArrayLayer = 0,
-//                                .layerCount = static_cast<uint32_t>(mv_view_config_views.size()),
-//                        }
-//                };
-//                b_qualify_vk(vkCreateImageView(mh_vkdevice, &vk_image_view_create_info, nullptr, &msc_depth.v_image_views[i]));
-//            }
-//        }
     }
 
     {//Vulkan pipeline setup
@@ -725,27 +669,6 @@ bool Program::BInit() {
             VkPipelineMultisampleStateCreateInfo multisample_state_create_info = {
                     .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
                     .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
-            };
-
-            VkPipelineDepthStencilStateCreateInfo depth_stencil_state_create_info = {
-                    .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-                    .depthTestEnable = VK_TRUE,
-                    .depthWriteEnable = VK_TRUE,
-                    .depthCompareOp = VK_COMPARE_OP_LESS,
-                    .depthBoundsTestEnable = VK_FALSE,
-                    .stencilTestEnable = VK_FALSE,
-                    .front = {
-                            .failOp = VK_STENCIL_OP_KEEP,
-                            .passOp = VK_STENCIL_OP_KEEP,
-                            .depthFailOp = VK_STENCIL_OP_KEEP,
-                            .compareOp = VK_COMPARE_OP_ALWAYS,
-                    },
-                    .back = {
-                            .failOp = VK_STENCIL_OP_KEEP,
-                            .passOp = VK_STENCIL_OP_KEEP,
-                            .depthFailOp = VK_STENCIL_OP_KEEP,
-                            .compareOp = VK_COMPARE_OP_ALWAYS,
-                    }
             };
 
             VkPipelineColorBlendAttachmentState color_blend_attachment_state = {
