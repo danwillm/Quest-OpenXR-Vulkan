@@ -19,7 +19,7 @@ constexpr XrPosef k_xr_pose_identity = {
         }                                                               \
     } while(0)                                                          \
 
-#define v_qualify_xr(x) do {                                             \
+#define v_qualify_xr(x) do {                                            \
         XrResult ret = x;                                               \
         if(XR_FAILED(ret)) {                                            \
             Log(LogError, "[QualifyXR] %s failed with: %i", #x, ret);   \
@@ -27,11 +27,19 @@ constexpr XrPosef k_xr_pose_identity = {
         }                                                               \
     } while(0)                                                          \
 
-#define b_qualify_vk(x) do {                                              \
+#define b_qualify_vk(x) do {                                            \
         VkResult ret = x;                                               \
         if(ret != VK_SUCCESS) {                                         \
             Log(LogError, "[QualifyVK] %s failed with: %i", #x, ret);   \
             return false;                                               \
+        }                                                               \
+    } while(0)                                                          \
+
+#define v_qualify_vk(x) do {                                            \
+        VkResult ret = x;                                               \
+        if(ret != VK_SUCCESS) {                                         \
+            Log(LogError, "[QualifyVK] %s failed with: %i", #x, ret);   \
+            return;                                                     \
         }                                                               \
     } while(0)                                                          \
 
@@ -58,19 +66,25 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL VkDebugCallback(
         void *pUserData) {
 
     ELogLevel logLevel;
-    switch (messageType) {
-        case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT: {
-            logLevel = LogWarning;
-            break;
-        }
-        case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT: {
+//    if ((messageType & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) ==
+//        VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
+//        logLevel = LogError;
+//    } else if ((messageType & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) ==
+//               VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
+//        logLevel = LogWarning;
+//    } else {
+//        logLevel = LogInfo;
+//    }
+
+    switch (messageSeverity) {
+        case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
             logLevel = LogError;
             break;
-        }
-        default: {
-            logLevel = LogInfo;
+        case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
+            logLevel = LogWarning;
             break;
-        }
+        default:
+            logLevel = LogInfo;
     }
 
     Log(logLevel, "[VkDebugCallback] %s", pCallbackData->pMessage);
@@ -105,7 +119,8 @@ static XRAPI_ATTR XrBool32 XRAPI_CALL XrDebugCallback(
     return XR_FALSE;
 }
 
-Program::Program(android_app *p_app, app_state *p_app_state) : mp_android_app(p_app), mp_app_state(p_app_state) {}
+Program::Program(android_app *p_app, app_state *p_app_state) : mp_android_app(p_app),
+                                                               mp_app_state(p_app_state) {}
 
 bool Program::BInit() {
     {//Initialize loader
@@ -144,25 +159,30 @@ bool Program::BInit() {
                 .enabledExtensionCount = static_cast<uint32_t>(v_cs_enabled_extensions.size()),
                 .enabledExtensionNames = v_cs_enabled_extensions.data(),
         };
-        b_qualify_xr(xrCreateInstance(&xr_instance_create_info, &mxr_instance));
+        b_qualify_xr(xrCreateInstance(&xr_instance_create_info, &mh_xrinstance));
 
         //OpenXR Function bindings
-        xr_get_proc(mxr_instance, xrCreateDebugUtilsMessengerEXT);
-        xr_get_proc(mxr_instance, xrGetVulkanGraphicsRequirements2KHR);
-        xr_get_proc(mxr_instance, xrCreateVulkanInstanceKHR);
-        xr_get_proc(mxr_instance, xrGetVulkanGraphicsDevice2KHR);
-        xr_get_proc(mxr_instance, xrCreateVulkanDeviceKHR);
+        xr_get_proc(mh_xrinstance, xrCreateDebugUtilsMessengerEXT);
+        xr_get_proc(mh_xrinstance, xrGetVulkanGraphicsRequirements2KHR);
+        xr_get_proc(mh_xrinstance, xrCreateVulkanInstanceKHR);
+        xr_get_proc(mh_xrinstance, xrGetVulkanGraphicsDevice2KHR);
+        xr_get_proc(mh_xrinstance, xrCreateVulkanDeviceKHR);
 
-        XrDebugUtilsMessengerCreateInfoEXT xr_debug_info{XR_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT};
-        xr_debug_info.messageSeverities = XR_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT | XR_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
+        XrDebugUtilsMessengerCreateInfoEXT xr_debug_info{
+                XR_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT};
+        xr_debug_info.messageSeverities = XR_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT |
+                                          XR_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
 #if !defined(NDEBUG)
         xr_debug_info.messageSeverities |=
-                VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
+                VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
+                VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
 #endif
-        xr_debug_info.messageTypes = XR_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | XR_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+        xr_debug_info.messageTypes = XR_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+                                     XR_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
                                      XR_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
         xr_debug_info.userCallback = XrDebugCallback;
-        b_qualify_xr(xrCreateDebugUtilsMessengerEXT(mxr_instance, &xr_debug_info, &mxr_debug_utils_messenger));
+        b_qualify_xr(xrCreateDebugUtilsMessengerEXT(mh_xrinstance, &xr_debug_info,
+                                                    &mh_xrdebug_utils_messenger));
     }
 
     {//OpenXR System Properties
@@ -170,15 +190,17 @@ bool Program::BInit() {
                 .type = XR_TYPE_SYSTEM_GET_INFO,
                 .formFactor = XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY,
         };
-        b_qualify_xr(xrGetSystem(mxr_instance, &xr_system_get_info, &mxr_system_id));
+        b_qualify_xr(xrGetSystem(mh_xrinstance, &xr_system_get_info, &mh_xrsystem_id));
 
         XrSystemProperties xr_system_properties = {XR_TYPE_SYSTEM_PROPERTIES};
-        b_qualify_xr(xrGetSystemProperties(mxr_instance, mxr_system_id, &xr_system_properties));
+        b_qualify_xr(xrGetSystemProperties(mh_xrinstance, mh_xrsystem_id, &xr_system_properties));
     }
 
     {//Vulkan Initialization
-        XrGraphicsRequirementsVulkan2KHR xr_graphics_requirements_vulkan{XR_TYPE_GRAPHICS_REQUIREMENTS_VULKAN2_KHR};
-        b_qualify_xr(xrGetVulkanGraphicsRequirements2KHR(mxr_instance, mxr_system_id, &xr_graphics_requirements_vulkan));
+        XrGraphicsRequirementsVulkan2KHR xr_graphics_requirements_vulkan{
+                XR_TYPE_GRAPHICS_REQUIREMENTS_VULKAN2_KHR};
+        b_qualify_xr(xrGetVulkanGraphicsRequirements2KHR(mh_xrinstance, mh_xrsystem_id,
+                                                         &xr_graphics_requirements_vulkan));
 
         std::vector<const char *> v_enabled_layers{};
 
@@ -189,7 +211,8 @@ bool Program::BInit() {
                 d_qualify_vk(vkEnumerateInstanceLayerProperties(&un_layer_count, nullptr));
 
                 std::vector<VkLayerProperties> v_available_layers(un_layer_count);
-                d_qualify_vk(vkEnumerateInstanceLayerProperties(&un_layer_count, v_available_layers.data()));
+                d_qualify_vk(vkEnumerateInstanceLayerProperties(&un_layer_count,
+                                                                v_available_layers.data()));
 
                 std::vector<const char *> v_validation_layer_names = {
                         "VK_LAYER_KHRONOS_validation",
@@ -218,15 +241,20 @@ bool Program::BInit() {
 
         {//Vulkan Extensions
             uint32_t un_extension_count = 0;
-            b_qualify_vk(vkEnumerateInstanceExtensionProperties(nullptr, &un_extension_count, nullptr));
+            b_qualify_vk(
+                    vkEnumerateInstanceExtensionProperties(nullptr, &un_extension_count, nullptr));
 
             std::vector<VkExtensionProperties> v_available_extensions(un_extension_count);
-            b_qualify_vk(vkEnumerateInstanceExtensionProperties(nullptr, &un_extension_count, v_available_extensions.data()));
+            b_qualify_vk(vkEnumerateInstanceExtensionProperties(nullptr, &un_extension_count,
+                                                                v_available_extensions.data()));
 
             auto BIsExtensionSupported = [&](const char *pc_extension_name) -> bool {
-                auto it = std::find_if(v_available_extensions.begin(), v_available_extensions.end(), [&](const VkExtensionProperties &vk_extension_properties) {
-                    return strcmp(pc_extension_name, vk_extension_properties.extensionName) == 0;
-                });
+                auto it = std::find_if(v_available_extensions.begin(), v_available_extensions.end(),
+                                       [&](const VkExtensionProperties &vk_extension_properties) {
+                                           return strcmp(pc_extension_name,
+                                                         vk_extension_properties.extensionName) ==
+                                                  0;
+                                       });
 
                 return it != v_available_extensions.end();
             };
@@ -254,7 +282,7 @@ bool Program::BInit() {
         };
 
         XrVulkanInstanceCreateInfoKHR xr_vulkan_instance_create_info = {
-                .systemId = mxr_system_id,
+                .systemId = mh_xrsystem_id,
                 .pfnGetInstanceProcAddr = &vkGetInstanceProcAddr,
                 .vulkanCreateInfo = &vk_instance_info,
                 .vulkanAllocator = nullptr,
@@ -262,44 +290,53 @@ bool Program::BInit() {
 
         {//Create Vulkan Instance
             VkResult vk_error;
-            b_qualify_xr(xrCreateVulkanInstanceKHR(mxr_instance, &xr_vulkan_instance_create_info, &mvk_instance, &vk_error));
+            b_qualify_xr(xrCreateVulkanInstanceKHR(mh_xrinstance, &xr_vulkan_instance_create_info,
+                                                   &mh_vkinstance, &vk_error));
             b_qualify_vk(vk_error);
 
-            vk_get_proc(mvk_instance, vkCreateDebugUtilsMessengerEXT);
-            vk_get_proc(mvk_instance, vkDestroyDebugUtilsMessengerEXT);
+            vk_get_proc(mh_vkinstance, vkCreateDebugUtilsMessengerEXT);
+            vk_get_proc(mh_vkinstance, vkDestroyDebugUtilsMessengerEXT);
 
-            VkDebugUtilsMessengerCreateInfoEXT vk_debug_info{VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT};
+            VkDebugUtilsMessengerCreateInfoEXT vk_debug_info{
+                    VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT};
             vk_debug_info.messageSeverity =
-                    VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
+                    VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT |
+                    VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
 #if !defined(NDEBUG)
             vk_debug_info.messageSeverity |=
-                    VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
+                    VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
+                    VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
 #endif
-            vk_debug_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+            vk_debug_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+                                        VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
                                         VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
             vk_debug_info.pfnUserCallback = VkDebugCallback;
             vk_debug_info.pUserData = this;
-            b_qualify_vk(vkCreateDebugUtilsMessengerEXT(mvk_instance, &vk_debug_info, nullptr, &mvk_debug_utils_messenger));
+            b_qualify_vk(vkCreateDebugUtilsMessengerEXT(mh_vkinstance, &vk_debug_info, nullptr,
+                                                        &mh_vkdebug_utils_messenger));
         }
     }
 
     {//Vulkan device creation
         XrVulkanGraphicsDeviceGetInfoKHR xr_vk_device_info = {
                 .type = XR_TYPE_VULKAN_GRAPHICS_DEVICE_GET_INFO_KHR,
-                .systemId = mxr_system_id,
-                .vulkanInstance = mvk_instance,
+                .systemId = mh_xrsystem_id,
+                .vulkanInstance = mh_vkinstance,
         };
-        b_qualify_xr(xrGetVulkanGraphicsDevice2KHR(mxr_instance, &xr_vk_device_info, &mvk_physical_device));
+        b_qualify_xr(xrGetVulkanGraphicsDevice2KHR(mh_xrinstance, &xr_vk_device_info,
+                                                   &mh_vkphysical_device));
 
         uint32_t un_queue_family_count = 0;
-        vkGetPhysicalDeviceQueueFamilyProperties(mvk_physical_device, &un_queue_family_count, nullptr);
+        vkGetPhysicalDeviceQueueFamilyProperties(mh_vkphysical_device, &un_queue_family_count,
+                                                 nullptr);
 
         std::vector<VkQueueFamilyProperties> v_queue_family_properties(un_queue_family_count);
-        vkGetPhysicalDeviceQueueFamilyProperties(mvk_physical_device, &un_queue_family_count, v_queue_family_properties.data());
+        vkGetPhysicalDeviceQueueFamilyProperties(mh_vkphysical_device, &un_queue_family_count,
+                                                 v_queue_family_properties.data());
 
         for (uint32_t i = 0; i < v_queue_family_properties.size(); i++) {
             if (v_queue_family_properties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-                mvkindex_queue_family = i;
+                mun_queue_family = i;
                 break;
             }
         }
@@ -307,7 +344,7 @@ bool Program::BInit() {
         float f_queue_priorities = 1.f;
         VkDeviceQueueCreateInfo vk_queue_info = {
                 .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-                .queueFamilyIndex = mvkindex_queue_family,
+                .queueFamilyIndex = mun_queue_family,
                 .queueCount = 1,
                 .pQueuePriorities = &f_queue_priorities,
         };
@@ -316,13 +353,8 @@ bool Program::BInit() {
 
         VkPhysicalDeviceFeatures vk_physical_device_features{};
 
-        VkPhysicalDeviceMultiviewFeatures vk_multiview_features = {
-                .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES,
-                .multiview = VK_TRUE,
-        };
         VkDeviceCreateInfo vk_device_create_info = {
                 .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-                .pNext = &vk_multiview_features,
                 .queueCreateInfoCount = 1,
                 .pQueueCreateInfos = &vk_queue_info,
                 .enabledLayerCount = 0,
@@ -334,36 +366,38 @@ bool Program::BInit() {
 
         XrVulkanDeviceCreateInfoKHR xr_vulkan_device_create_info = {
                 .type = XR_TYPE_VULKAN_DEVICE_CREATE_INFO_KHR,
-                .systemId = mxr_system_id,
+                .systemId = mh_xrsystem_id,
                 .pfnGetInstanceProcAddr = &vkGetInstanceProcAddr,
-                .vulkanPhysicalDevice = mvk_physical_device,
+                .vulkanPhysicalDevice = mh_vkphysical_device,
                 .vulkanCreateInfo = &vk_device_create_info,
                 .vulkanAllocator = nullptr
         };
 
         VkResult vk_err;
-        b_qualify_xr(xrCreateVulkanDeviceKHR(mxr_instance, &xr_vulkan_device_create_info, &mvk_device, &vk_err));
+        b_qualify_xr(
+                xrCreateVulkanDeviceKHR(mh_xrinstance, &xr_vulkan_device_create_info, &mh_vkdevice,
+                                        &vk_err));
         b_qualify_vk(vk_err);
 
-        vkGetDeviceQueue(mvk_device, mvkindex_queue_family, 0, &mvk_queue);
+        vkGetDeviceQueue(mh_vkdevice, mun_queue_family, 0, &mh_vkqueue);
     }
 
     {//Create OpenXR Session
         XrGraphicsBindingVulkanKHR xr_graphics_binding_vulkan = {
                 .type = XR_TYPE_GRAPHICS_BINDING_VULKAN2_KHR,
-                .instance = mvk_instance,
-                .physicalDevice = mvk_physical_device,
-                .device = mvk_device,
-                .queueFamilyIndex = mvkindex_queue_family,
+                .instance = mh_vkinstance,
+                .physicalDevice = mh_vkphysical_device,
+                .device = mh_vkdevice,
+                .queueFamilyIndex = mun_queue_family,
                 .queueIndex = 0
         };
         XrSessionCreateInfo xr_session_create_info = {
                 .type = XR_TYPE_SESSION_CREATE_INFO,
                 .next = &xr_graphics_binding_vulkan,
                 .createFlags = 0,
-                .systemId = mxr_system_id
+                .systemId = mh_xrsystem_id
         };
-        b_qualify_xr(xrCreateSession(mxr_instance, &xr_session_create_info, &mxr_session));
+        b_qualify_xr(xrCreateSession(mh_xrinstance, &xr_session_create_info, &mh_xrsession));
 
         for (XrReferenceSpaceType xr_reference_space_type: {XR_REFERENCE_SPACE_TYPE_VIEW,
                                                             XR_REFERENCE_SPACE_TYPE_STAGE,
@@ -374,40 +408,60 @@ bool Program::BInit() {
                     .poseInReferenceSpace = k_xr_pose_identity,
             };
 
-            b_qualify_xr(xrCreateReferenceSpace(mxr_session, &xr_reference_space_create_info, &mmap_reference_spaces[xr_reference_space_type]));
+            b_qualify_xr(xrCreateReferenceSpace(mh_xrsession, &xr_reference_space_create_info,
+                                                &mmap_reference_spaces[xr_reference_space_type]));
         }
     }
 
     {//OpenXR View configuration
         uint32_t un_view_config_count;
-        b_qualify_xr(xrEnumerateViewConfigurations(mxr_instance, mxr_system_id, 0, &un_view_config_count, nullptr));
+        b_qualify_xr(xrEnumerateViewConfigurations(mh_xrinstance, mh_xrsystem_id, 0,
+                                                   &un_view_config_count, nullptr));
 
         std::vector<XrViewConfigurationType> v_view_config_types(un_view_config_count);
-        b_qualify_xr(xrEnumerateViewConfigurations(mxr_instance, mxr_system_id, v_view_config_types.size(), &un_view_config_count, v_view_config_types.data()));
+        b_qualify_xr(xrEnumerateViewConfigurations(mh_xrinstance, mh_xrsystem_id,
+                                                   v_view_config_types.size(),
+                                                   &un_view_config_count,
+                                                   v_view_config_types.data()));
 
         me_app_view_type = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
 
-        if (std::find(v_view_config_types.begin(), v_view_config_types.end(), XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO) == v_view_config_types.end()) {
-            throw std::runtime_error("[XrProgram] View configuration STEREO was not supported on runtime");
+        if (std::find(v_view_config_types.begin(), v_view_config_types.end(),
+                      XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO) == v_view_config_types.end()) {
+            throw std::runtime_error(
+                    "[XrProgram] View configuration STEREO was not supported on runtime");
         }
 
         uint32_t un_view_config_views_count;
-        b_qualify_xr(xrEnumerateViewConfigurationViews(mxr_instance, mxr_system_id, me_app_view_type, 0, &un_view_config_views_count, nullptr));
+        b_qualify_xr(
+                xrEnumerateViewConfigurationViews(mh_xrinstance, mh_xrsystem_id, me_app_view_type,
+                                                  0, &un_view_config_views_count, nullptr));
 
         mv_view_config_views.resize(un_view_config_views_count, {XR_TYPE_VIEW_CONFIGURATION_VIEW});
-        b_qualify_xr(xrEnumerateViewConfigurationViews(mxr_instance, mxr_system_id, me_app_view_type, mv_view_config_views.size(), &un_view_config_views_count,
-                                                       mv_view_config_views.data()));
+        b_qualify_xr(
+                xrEnumerateViewConfigurationViews(mh_xrinstance, mh_xrsystem_id, me_app_view_type,
+                                                  mv_view_config_views.size(),
+                                                  &un_view_config_views_count,
+                                                  mv_view_config_views.data()));
+
+        mv_views.resize(un_view_config_views_count, {XR_TYPE_VIEW});
     }
 
     {//Create swapchains
         uint32_t un_swapchain_formats_count;
-        b_qualify_xr(xrEnumerateSwapchainFormats(mxr_session, 0, &un_swapchain_formats_count, nullptr));
+        b_qualify_xr(
+                xrEnumerateSwapchainFormats(mh_xrsession, 0, &un_swapchain_formats_count, nullptr));
 
         std::vector<int64_t> v_swapchain_formats(un_swapchain_formats_count);
-        b_qualify_xr(xrEnumerateSwapchainFormats(mxr_session, v_swapchain_formats.size(), &un_swapchain_formats_count, v_swapchain_formats.data()));
+        b_qualify_xr(xrEnumerateSwapchainFormats(mh_xrsession, v_swapchain_formats.size(),
+                                                 &un_swapchain_formats_count,
+                                                 v_swapchain_formats.data()));
 
-        auto GetSupportedSwapchainFormat = [](const std::vector<VkFormat> &vVkSupportedFormats, std::vector<int64_t> &vLAvailableFormats) -> uint64_t {
-            auto it = std::find_first_of(vLAvailableFormats.begin(), vLAvailableFormats.end(), std::begin(vVkSupportedFormats), std::end(vVkSupportedFormats));
+        auto GetSupportedSwapchainFormat = [](const std::vector<VkFormat> &vVkSupportedFormats,
+                                              std::vector<int64_t> &vLAvailableFormats) -> int64_t {
+            auto it = std::find_first_of(vLAvailableFormats.begin(), vLAvailableFormats.end(),
+                                         std::begin(vVkSupportedFormats),
+                                         std::end(vVkSupportedFormats));
 
             if (it == vLAvailableFormats.end()) {
                 return 0;
@@ -427,18 +481,22 @@ bool Program::BInit() {
                 VK_FORMAT_D16_UNORM
         };
 
-        int64_t l_supported_color_format = GetSupportedSwapchainFormat(vvk_color_formats, v_swapchain_formats);
-        int64_t l_supported_depth_format = GetSupportedSwapchainFormat(vvk_color_formats, v_swapchain_formats);
+        int64_t l_supported_color_format = GetSupportedSwapchainFormat(vvk_color_formats,
+                                                                       v_swapchain_formats);
+        int64_t l_supported_depth_format = GetSupportedSwapchainFormat(vvk_color_formats,
+                                                                       v_swapchain_formats);
 
         if (l_supported_color_format == 0 || l_supported_depth_format == 0) {
-            throw std::runtime_error("[XrProgram] No supported swapchain format for depth or color was supported!");
+            throw std::runtime_error(
+                    "[XrProgram] No supported swapchain format for depth or color was supported!");
         }
 
-        {//Color swapchain
-            XrSwapchainCreateInfo xr_swapchain_color_create_info = {
+        for (int i = 0; i < 2; i++) {//Color swapchain
+            XrSwapchainCreateInfo swapchain_color_create_info = {
                     .type = XR_TYPE_SWAPCHAIN_CREATE_INFO,
                     .createFlags = 0,
-                    .usageFlags = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT,
+                    .usageFlags = XR_SWAPCHAIN_USAGE_SAMPLED_BIT |
+                                  XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT,
                     .format = l_supported_color_format,
                     .sampleCount = mv_view_config_views.front().recommendedSwapchainSampleCount,
                     .width = mv_view_config_views.front().recommendedImageRectWidth, //assume same
@@ -447,25 +505,33 @@ bool Program::BInit() {
                     .arraySize = static_cast<uint32_t>(mv_view_config_views.size()),
                     .mipCount = 1,
             };
-            b_qualify_xr(xrCreateSwapchain(mxr_session, &xr_swapchain_color_create_info, &mswapchain_color.swapchain));
+            b_qualify_xr(xrCreateSwapchain(mh_xrsession, &swapchain_color_create_info,
+                                           &mv_sccolor[i].swapchain));
 
             uint32_t un_swapchain_image_count;
-            b_qualify_xr(xrEnumerateSwapchainImages(mswapchain_color.swapchain, 0, &un_swapchain_image_count, nullptr));
+            b_qualify_xr(xrEnumerateSwapchainImages(mv_sccolor[i].swapchain, 0,
+                                                    &un_swapchain_image_count, nullptr));
 
-            auto &swapchain_images = mswapchain_color.v_images;
-            swapchain_images.resize(un_swapchain_image_count, {XR_TYPE_SWAPCHAIN_IMAGE_VULKAN2_KHR});
-            b_qualify_xr(xrEnumerateSwapchainImages(mswapchain_color.swapchain, swapchain_images.size(), &un_swapchain_image_count,
-                                                    reinterpret_cast<XrSwapchainImageBaseHeader *>(swapchain_images.data())));
+            auto &swapchain_images = mv_sccolor[i].v_images;
+            swapchain_images.resize(un_swapchain_image_count,
+                                    {XR_TYPE_SWAPCHAIN_IMAGE_VULKAN2_KHR});
+            b_qualify_xr(
+                    xrEnumerateSwapchainImages(mv_sccolor[i].swapchain, swapchain_images.size(),
+                                               &un_swapchain_image_count,
+                                               reinterpret_cast<XrSwapchainImageBaseHeader *>(swapchain_images.data())));
 
-            mswapchain_color.vk_format = static_cast<VkFormat>(l_supported_color_format);
+            mv_sccolor[i].vk_format = static_cast<VkFormat>(l_supported_color_format);
 
-            mswapchain_color.v_image_views.resize(mswapchain_color.v_images.size());
-            for (uint32_t i = 0; i < mswapchain_color.v_images.size(); i++) {
+            mv_sccolor[i].extent = {mv_view_config_views.front().recommendedImageRectWidth,
+                                    mv_view_config_views.front().recommendedImageRectHeight};
+
+            mv_sccolor[i].v_image_views.resize(mv_sccolor[i].v_images.size());
+            for (uint32_t k = 0; k < mv_sccolor[i].v_images.size(); k++) {
                 VkImageViewCreateInfo vk_image_view_create_info = {
                         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-                        .image = mswapchain_color.v_images[i].image,
+                        .image = mv_sccolor[i].v_images[k].image,
                         .viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY,
-                        .format = mswapchain_color.vk_format,
+                        .format = mv_sccolor[i].vk_format,
                         .components = {
                                 .r = VK_COMPONENT_SWIZZLE_R,
                                 .g = VK_COMPONENT_SWIZZLE_G,
@@ -480,70 +546,75 @@ bool Program::BInit() {
                                 .layerCount = static_cast<uint32_t>(mv_view_config_views.size()),
                         }
                 };
-                b_qualify_vk(vkCreateImageView(mvk_device, &vk_image_view_create_info, nullptr, &mswapchain_color.v_image_views[i]));
+
+                b_qualify_vk(vkCreateImageView(mh_vkdevice, &vk_image_view_create_info, nullptr,
+                                               &mv_sccolor[i].v_image_views[k]));
             }
         }
 
-        {//Depth swapchain
-            XrSwapchainCreateInfo xr_swapchain_depth_create_info = {
-                    .type = XR_TYPE_SWAPCHAIN_CREATE_INFO,
-                    .createFlags = 0,
-                    .usageFlags = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                    .format = l_supported_depth_format,
-                    .sampleCount = mv_view_config_views.front().recommendedSwapchainSampleCount,
-                    .width = mv_view_config_views.front().recommendedImageRectWidth, //assume same
-                    .height = mv_view_config_views.front().recommendedImageRectHeight,
-                    .faceCount = 1,
-                    .arraySize = static_cast<uint32_t>(mv_view_config_views.size()),
-                    .mipCount = 1,
-            };
-            b_qualify_xr(xrCreateSwapchain(mxr_session, &xr_swapchain_depth_create_info, &mswapchain_depth.swapchain));
-
-            uint32_t un_swapchain_image_count;
-            b_qualify_xr(xrEnumerateSwapchainImages(mswapchain_depth.swapchain, 0, &un_swapchain_image_count, nullptr));
-
-            auto &swapchain_images = mswapchain_depth.v_images;
-            swapchain_images.resize(un_swapchain_image_count, {XR_TYPE_SWAPCHAIN_IMAGE_VULKAN2_KHR});
-            b_qualify_xr(xrEnumerateSwapchainImages(mswapchain_depth.swapchain, swapchain_images.size(), &un_swapchain_image_count,
-                                                    reinterpret_cast<XrSwapchainImageBaseHeader *>(swapchain_images.data())));
-
-            mswapchain_depth.vk_format = static_cast<VkFormat>(l_supported_depth_format);
-
-            mswapchain_depth.v_image_views.resize(mswapchain_depth.v_images.size());
-            for (uint32_t i = 0; i < mswapchain_depth.v_images.size(); i++) {
-                VkImageViewCreateInfo vk_image_view_create_info = {
-                        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-                        .image = mswapchain_depth.v_images[i].image,
-                        .viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY,
-                        .format = mswapchain_depth.vk_format,
-                        .components = {
-                                .r = VK_COMPONENT_SWIZZLE_R,
-                                .g = VK_COMPONENT_SWIZZLE_G,
-                                .b = VK_COMPONENT_SWIZZLE_B,
-                                .a = VK_COMPONENT_SWIZZLE_A
-                        },
-                        .subresourceRange = {
-                                .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-                                .baseMipLevel = 0,
-                                .levelCount = 1,
-                                .baseArrayLayer = 0,
-                                .layerCount = static_cast<uint32_t>(mv_view_config_views.size()),
-                        }
-                };
-                b_qualify_vk(vkCreateImageView(mvk_device, &vk_image_view_create_info, nullptr, &mswapchain_depth.v_image_views[i]));
-            }
-        }
+//        {//Depth swapchain
+//            XrSwapchainCreateInfo xr_swapchain_depth_create_info = {
+//                    .type = XR_TYPE_SWAPCHAIN_CREATE_INFO,
+//                    .createFlags = 0,
+//                    .usageFlags = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+//                    .format = l_supported_depth_format,
+//                    .sampleCount = mv_view_config_views.front().recommendedSwapchainSampleCount,
+//                    .width = mv_view_config_views.front().recommendedImageRectWidth, //assume same
+//                    .height = mv_view_config_views.front().recommendedImageRectHeight,
+//                    .faceCount = 1,
+//                    .arraySize = static_cast<uint32_t>(mv_view_config_views.size()),
+//                    .mipCount = 1,
+//            };
+//            b_qualify_xr(xrCreateSwapchain(mh_xrsession, &xr_swapchain_depth_create_info, &msc_depth.swapchain));
+//
+//            uint32_t un_swapchain_image_count;
+//            b_qualify_xr(xrEnumerateSwapchainImages(msc_depth.swapchain, 0, &un_swapchain_image_count, nullptr));
+//
+//            auto &swapchain_images = msc_depth.v_images;
+//            swapchain_images.resize(un_swapchain_image_count, {XR_TYPE_SWAPCHAIN_IMAGE_VULKAN2_KHR});
+//            b_qualify_xr(xrEnumerateSwapchainImages(msc_depth.swapchain, swapchain_images.size(), &un_swapchain_image_count,
+//                                                    reinterpret_cast<XrSwapchainImageBaseHeader *>(swapchain_images.data())));
+//
+//            msc_depth.vk_format = static_cast<VkFormat>(l_supported_depth_format);
+//
+//            msc_depth.v_image_views.resize(msc_depth.v_images.size());
+//            for (uint32_t i = 0; i < msc_depth.v_images.size(); i++) {
+//                VkImageViewCreateInfo vk_image_view_create_info = {
+//                        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+//                        .image = msc_depth.v_images[i].image,
+//                        .viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY,
+//                        .format = msc_depth.vk_format,
+//                        .components = {
+//                                .r = VK_COMPONENT_SWIZZLE_R,
+//                                .g = VK_COMPONENT_SWIZZLE_G,
+//                                .b = VK_COMPONENT_SWIZZLE_B,
+//                                .a = VK_COMPONENT_SWIZZLE_A
+//                        },
+//                        .subresourceRange = {
+//                                .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+//                                .baseMipLevel = 0,
+//                                .levelCount = 1,
+//                                .baseArrayLayer = 0,
+//                                .layerCount = static_cast<uint32_t>(mv_view_config_views.size()),
+//                        }
+//                };
+//                b_qualify_vk(vkCreateImageView(mh_vkdevice, &vk_image_view_create_info, nullptr, &msc_depth.v_image_views[i]));
+//            }
+//        }
     }
 
     {//Vulkan pipeline setup
-        auto CreateShaderModule = [](VkDevice device, size_t size_buffer, const uint32_t *pun_buffer, VkShaderModule &out_vk_shader_module) {
+        auto CreateShaderModule = [](VkDevice device, size_t size_buffer,
+                                     const uint32_t *pun_buffer,
+                                     VkShaderModule &out_vk_shader_module) {
             VkShaderModuleCreateInfo vk_shader_module_create_info = {
                     .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
                     .codeSize = size_buffer,
                     .pCode = pun_buffer,
             };
 
-            b_qualify_vk(vkCreateShaderModule(device, &vk_shader_module_create_info, nullptr, &out_vk_shader_module));
+            b_qualify_vk(vkCreateShaderModule(device, &vk_shader_module_create_info, nullptr,
+                                              &out_vk_shader_module));
 
             return true;
         };
@@ -552,8 +623,12 @@ bool Program::BInit() {
         VkShaderModule vksm_fragment;
 
         {//Vertex shader
-            AAsset *passet_vertex = AAssetManager_open(mp_android_app->activity->assetManager, "shaders/shader.vert.spv", AASSET_MODE_BUFFER);
-            if (!CreateShaderModule(mvk_device, AAsset_getLength(passet_vertex), static_cast<const uint32_t *>(AAsset_getBuffer(passet_vertex)), vksm_vertex)) {
+            AAsset *passet_vertex = AAssetManager_open(mp_android_app->activity->assetManager,
+                                                       "shaders/shader.vert.spv",
+                                                       AASSET_MODE_BUFFER);
+            if (!CreateShaderModule(mh_vkdevice, AAsset_getLength(passet_vertex),
+                                    static_cast<const uint32_t *>(AAsset_getBuffer(passet_vertex)),
+                                    vksm_vertex)) {
                 Log(LogError, "[XrProgram] Failed to create vertex shader!");
 
                 AAsset_close(passet_vertex);
@@ -564,8 +639,12 @@ bool Program::BInit() {
         }
 
         {//Fragment shader
-            AAsset *passet_fragment = AAssetManager_open(mp_android_app->activity->assetManager, "shaders/shader.frag.spv", AASSET_MODE_BUFFER);
-            if (!CreateShaderModule(mvk_device, AAsset_getLength(passet_fragment), static_cast<const uint32_t *>(AAsset_getBuffer(passet_fragment)), vksm_fragment)) {
+            AAsset *passet_fragment = AAssetManager_open(mp_android_app->activity->assetManager,
+                                                         "shaders/shader.frag.spv",
+                                                         AASSET_MODE_BUFFER);
+            if (!CreateShaderModule(mh_vkdevice, AAsset_getLength(passet_fragment),
+                                    static_cast<const uint32_t *>(AAsset_getBuffer(
+                                            passet_fragment)), vksm_fragment)) {
                 Log(LogError, "[XrProgram] Failed to create fragment shader!");
 
                 AAsset_close(passet_fragment);
@@ -575,94 +654,224 @@ bool Program::BInit() {
             AAsset_close(passet_fragment);
         }
 
-        VkPipelineShaderStageCreateInfo vk_pipeline_shader_stage_create_info[] = {
-                {
-                        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                        .stage = VK_SHADER_STAGE_VERTEX_BIT,
-                        .module = vksm_vertex,
-                        .pName = "main"
-                },
-                {
-                        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                        .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-                        .module = vksm_fragment,
-                        .pName = "main"
-                }
-        };
+        //TODO: split this up
+        for (int i = 0; i < 2; i++) {
+            VkPipelineShaderStageCreateInfo pipeline_shader_stage_create_info[] = {
+                    {
+                            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                            .stage = VK_SHADER_STAGE_VERTEX_BIT,
+                            .module = vksm_vertex,
+                            .pName = "main"
+                    },
+                    {
+                            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                            .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+                            .module = vksm_fragment,
+                            .pName = "main"
+                    }
+            };
 
-        std::vector<VkDynamicState> vvk_dynamic_states = {
-        };
+            std::vector<VkDynamicState> vvk_dynamic_states = {
+            };
 
-        VkPipelineDynamicStateCreateInfo vk_pipeline_dynamic_state_create_info = {
-                .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-                .dynamicStateCount = static_cast<uint32_t>(vvk_dynamic_states.size()),
-                .pDynamicStates = vvk_dynamic_states.data()
-        };
+            VkPipelineDynamicStateCreateInfo dynamic_state_create_info = {
+                    .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+                    .dynamicStateCount = static_cast<uint32_t>(vvk_dynamic_states.size()),
+                    .pDynamicStates = vvk_dynamic_states.data()
+            };
 
+            VkPipelineVertexInputStateCreateInfo vertex_input_state_create_info = {
+                    .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+                    .vertexBindingDescriptionCount = 0,
+                    .pVertexBindingDescriptions = nullptr,
+                    .vertexAttributeDescriptionCount = 0,
+                    .pVertexAttributeDescriptions = nullptr,
+            };
 
-        VkPipelineVertexInputStateCreateInfo vk_pipeline_vertex_input_state_create_info = {
-                .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-                .vertexBindingDescriptionCount = 0,
-                .pVertexBindingDescriptions = nullptr,
-                .vertexAttributeDescriptionCount = 0,
-                .pVertexAttributeDescriptions = nullptr,
-        };
+            VkPipelineInputAssemblyStateCreateInfo input_assembly_create_info = {
+                    .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+                    .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+                    .primitiveRestartEnable = VK_FALSE,
+            };
 
-        VkPipelineInputAssemblyStateCreateInfo vk_input_assembly_create_info = {
-                .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-                .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-                .primitiveRestartEnable = VK_FALSE,
-        };
+            VkViewport viewport = {
+                    .width = (float) mv_sccolor[i].extent.width,
+                    .height = (float) mv_sccolor[i].extent.height,
+                    .minDepth = 0.f,
+                    .maxDepth = 1.f
+            };
+            VkRect2D scissor = {
+                    .offset = {0, 0},
+                    .extent = mv_sccolor[i].extent,
+            };
+            VkPipelineViewportStateCreateInfo viewport_state_create_info = {
+                    .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+                    .viewportCount = 1,
+                    .pViewports = &viewport,
+                    .scissorCount = 1,
+                    .pScissors = &scissor
+            };
 
-        VkPipelineRasterizationStateCreateInfo vk_rasterization_state_create_info = {
-                .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-                .depthClampEnable = VK_FALSE,
-                .polygonMode = VK_POLYGON_MODE_FILL,
-                .cullMode = VK_CULL_MODE_BACK_BIT,
-                .frontFace = VK_FRONT_FACE_CLOCKWISE,
-                .depthBiasEnable = VK_FALSE,
-                .lineWidth = 1.f,
-        };
+            VkPipelineRasterizationStateCreateInfo rasterization_state_create_info = {
+                    .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+                    .depthClampEnable = VK_FALSE,
+                    .polygonMode = VK_POLYGON_MODE_FILL,
+                    .cullMode = VK_CULL_MODE_BACK_BIT,
+                    .frontFace = VK_FRONT_FACE_CLOCKWISE,
+                    .depthBiasEnable = VK_FALSE,
+                    .lineWidth = 1.f,
+            };
 
-        VkPipelineMultisampleStateCreateInfo vk_multisample_state_create_info = {
-                .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-                .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
-        };
+            VkPipelineMultisampleStateCreateInfo multisample_state_create_info = {
+                    .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+                    .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+            };
 
-        VkPipelineDepthStencilStateCreateInfo vk_depth_stencil_state_create_info = {
-                .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-                .depthTestEnable = VK_TRUE,
-                .depthWriteEnable = VK_TRUE,
-                .depthCompareOp = VK_COMPARE_OP_LESS,
-                .depthBoundsTestEnable = VK_FALSE,
-                .stencilTestEnable = VK_FALSE,
-                .front = {
-                        .failOp = VK_STENCIL_OP_KEEP,
-                        .passOp = VK_STENCIL_OP_KEEP,
-                        .depthFailOp = VK_STENCIL_OP_KEEP,
-                        .compareOp = VK_COMPARE_OP_ALWAYS,
-                },
-                .back = {
-                        .failOp = VK_STENCIL_OP_KEEP,
-                        .passOp = VK_STENCIL_OP_KEEP,
-                        .depthFailOp = VK_STENCIL_OP_KEEP,
-                        .compareOp = VK_COMPARE_OP_ALWAYS,
-                }
-        };
+            VkPipelineDepthStencilStateCreateInfo depth_stencil_state_create_info = {
+                    .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+                    .depthTestEnable = VK_TRUE,
+                    .depthWriteEnable = VK_TRUE,
+                    .depthCompareOp = VK_COMPARE_OP_LESS,
+                    .depthBoundsTestEnable = VK_FALSE,
+                    .stencilTestEnable = VK_FALSE,
+                    .front = {
+                            .failOp = VK_STENCIL_OP_KEEP,
+                            .passOp = VK_STENCIL_OP_KEEP,
+                            .depthFailOp = VK_STENCIL_OP_KEEP,
+                            .compareOp = VK_COMPARE_OP_ALWAYS,
+                    },
+                    .back = {
+                            .failOp = VK_STENCIL_OP_KEEP,
+                            .passOp = VK_STENCIL_OP_KEEP,
+                            .depthFailOp = VK_STENCIL_OP_KEEP,
+                            .compareOp = VK_COMPARE_OP_ALWAYS,
+                    }
+            };
 
-        VkPipelineColorBlendAttachmentState vk_color_blend_attachment_state = {
-                .blendEnable = VK_FALSE,
-                .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
-        };
+            VkPipelineColorBlendAttachmentState color_blend_attachment_state = {
+                    .blendEnable = VK_FALSE,
+                    .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                      VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+            };
+            VkPipelineColorBlendStateCreateInfo color_blend_state_create_info = {
+                    .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+                    .logicOpEnable = VK_FALSE,
+                    .logicOp = VK_LOGIC_OP_COPY,
+                    .attachmentCount = 1,
+                    .pAttachments = &color_blend_attachment_state,
+            };
 
-        VkPipelineLayoutCreateInfo vk_pipeline_layout_create_info = {
-                .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-                .setLayoutCount = 0,
-                .pSetLayouts = nullptr,
-                .pushConstantRangeCount = 0,
-                .pPushConstantRanges = nullptr,
+            VkPipelineLayoutCreateInfo pipeline_layout_create_info = {
+                    .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+                    .setLayoutCount = 0,
+                    .pSetLayouts = nullptr,
+                    .pushConstantRangeCount = 0,
+                    .pPushConstantRanges = nullptr,
+            };
+            b_qualify_vk(vkCreatePipelineLayout(mh_vkdevice, &pipeline_layout_create_info, nullptr,
+                                                &mh_vkpipeline_layout));
+
+            VkAttachmentDescription color_attachment = {
+                    .format = mv_sccolor[i].vk_format,
+                    .samples = VK_SAMPLE_COUNT_1_BIT,
+                    .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                    .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                    .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                    .stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE,
+                    .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                    .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+            };
+            VkAttachmentReference color_attachment_reference = {
+                    .attachment = 0,
+                    .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            };
+            VkSubpassDescription subpass_description = {
+                    .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+                    .colorAttachmentCount = 1,
+                    .pColorAttachments = &color_attachment_reference,
+            };
+
+            VkRenderPassCreateInfo render_pass_create_info = {
+                    .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+                    .attachmentCount = 1,
+                    .pAttachments = &color_attachment,
+                    .subpassCount = 1,
+                    .pSubpasses = &subpass_description,
+            };
+            b_qualify_vk(vkCreateRenderPass(mh_vkdevice, &render_pass_create_info, nullptr,
+                                            &mh_vkrender_pass));
+
+            VkGraphicsPipelineCreateInfo pipeline_create_info = {
+                    .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+                    .stageCount = 2,
+                    .pStages = pipeline_shader_stage_create_info,
+                    .pVertexInputState = &vertex_input_state_create_info,
+                    .pInputAssemblyState = &input_assembly_create_info,
+                    .pViewportState = &viewport_state_create_info,
+                    .pRasterizationState = &rasterization_state_create_info,
+                    .pMultisampleState = &multisample_state_create_info,
+                    .pColorBlendState = &color_blend_state_create_info,
+                    .pDynamicState = &dynamic_state_create_info,
+                    .layout = mh_vkpipeline_layout,
+                    .renderPass = mh_vkrender_pass,
+                    .subpass = 0,
+                    .basePipelineHandle = VK_NULL_HANDLE,
+                    .basePipelineIndex = -1,
+            };
+            b_qualify_vk(
+                    vkCreateGraphicsPipelines(mh_vkdevice, VK_NULL_HANDLE, 1, &pipeline_create_info,
+                                              nullptr, &mh_vkgraphics_pipeline));
+
+            mv_sccolor[i].v_framebuffers.resize(mv_sccolor[i].v_images.size());
+            for (size_t k = 0; k < mv_sccolor[i].v_images.size(); k++) {
+                VkImageView v_attachments[] = {
+                        mv_sccolor[i].v_image_views[k],
+                };
+
+                VkFramebufferCreateInfo frame_buffer_create_info = {
+                        .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+                        .renderPass = mh_vkrender_pass,
+                        .attachmentCount = 1,
+                        .pAttachments = v_attachments,
+                        .width = mv_sccolor[i].extent.width,
+                        .height = mv_sccolor[i].extent.height,
+                        .layers = 1,
+                };
+                b_qualify_vk(vkCreateFramebuffer(mh_vkdevice, &frame_buffer_create_info, nullptr,
+                                                 &mv_sccolor[i].v_framebuffers[k]));
+            }
+        }
+
+        VkCommandPoolCreateInfo command_pool_create_info = {
+                .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+                .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+                .queueFamilyIndex = mun_queue_family
         };
-        b_qualify_vk(vkCreatePipelineLayout(mvk_device, &vk_pipeline_layout_create_info, nullptr, &mvk_pipeline_layout));
+        b_qualify_vk(vkCreateCommandPool(mh_vkdevice, &command_pool_create_info, nullptr,
+                                         &mh_vkcommand_pool));
+
+        VkCommandBufferAllocateInfo command_buffer_allocate_info = {
+                .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+                .commandPool = mh_vkcommand_pool,
+                .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+                .commandBufferCount = 1
+        };
+        b_qualify_vk(vkAllocateCommandBuffers(mh_vkdevice, &command_buffer_allocate_info,
+                                              &mh_vkcommand_buffer));
+    }
+
+    {//Synchronisation setup
+        VkFenceCreateInfo fence_create_info = {
+                .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+                .flags = VK_FENCE_CREATE_SIGNALED_BIT,
+        };
+        b_qualify_vk(vkCreateFence(mh_vkdevice, &fence_create_info, nullptr, &mh_fence_exec));
+
+        VkSemaphoreCreateInfo semaphore_create_info = {
+                .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+        };
+        b_qualify_vk(vkCreateSemaphore(mh_vkdevice, &semaphore_create_info, nullptr,
+                                       &mh_semaphore_render_finished));
     }
 
     return true;
@@ -670,49 +879,75 @@ bool Program::BInit() {
 
 void Program::Tick() {
     XrEventDataBuffer xr_event_buffer{XR_TYPE_EVENT_DATA_BUFFER};
-    while (XrResult result = xrPollEvent(mxr_instance, &xr_event_buffer)) {
+    XrResult result = xrPollEvent(mh_xrinstance, &xr_event_buffer);
+    while (result == XR_SUCCESS) {
+        Log("[XrProgram] Event!");
         switch (xr_event_buffer.type) {
             case XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED: {
                 XrEventDataSessionStateChanged *pxr_session_state_changed = reinterpret_cast<XrEventDataSessionStateChanged *>(&xr_event_buffer);
-                if (pxr_session_state_changed->session != mxr_session) {
+                if (pxr_session_state_changed->session != mh_xrsession) {
                     Log("[XrProgram] Received session state changed for unknown session?!");
                     break;
                 }
 
                 switch (pxr_session_state_changed->state) {
-                    case XR_SESSION_STATE_READY: {
-                        XrSessionBeginInfo xr_session_begin_info = {
-                                .type = XR_TYPE_SESSION_BEGIN_INFO,
-                                .primaryViewConfigurationType = me_app_view_type
-                        };
-                        v_qualify_xr(xrBeginSession(mxr_session, &xr_session_begin_info));
+                    case XR_SESSION_STATE_IDLE:
+                    case XR_SESSION_STATE_UNKNOWN: {
+                        mb_should_run_framecycle = false;
 
+                        break;
+                    }
+
+                    case XR_SESSION_STATE_FOCUSED:
+                    case XR_SESSION_STATE_SYNCHRONIZED:
+                    case XR_SESSION_STATE_VISIBLE: {
+                        mb_should_run_framecycle = true;
+
+                        break;
+                    }
+
+                    case XR_SESSION_STATE_READY: {
+                        if (!mb_is_session_running) {
+                            Log("[XrProgram] Session began");
+                            XrSessionBeginInfo xr_session_begin_info = {
+                                    .type = XR_TYPE_SESSION_BEGIN_INFO,
+                                    .primaryViewConfigurationType = me_app_view_type
+                            };
+                            v_qualify_xr(xrBeginSession(mh_xrsession, &xr_session_begin_info));
+
+                            mb_is_session_running = true;
+                        }
+
+                        mb_should_run_framecycle = true;
                         break;
                     }
 
                     case XR_SESSION_STATE_STOPPING: {
-                        v_qualify_xr(xrEndSession(mxr_session));
-                        mb_session_running = false;
+                        if (mb_is_session_running) {
+                            v_qualify_xr(xrEndSession(mh_xrsession));
+                            mb_is_session_running = false;
+                        }
 
+                        mb_should_run_framecycle = true;
                         break;
                     }
 
+                    case XR_SESSION_STATE_LOSS_PENDING:
                     case XR_SESSION_STATE_EXITING: {
-                        mb_session_running = false;
-                        mp_app_state->b_app_running = false;
+                        Log("[XrProgram] Destroying session");
 
-                        break;
-                    }
+                        v_qualify_xr(xrDestroySession(mh_xrsession));
 
-                    case XR_SESSION_STATE_LOSS_PENDING: {
-                        mb_session_running = false;
+                        mb_is_session_running = false;
+                        mb_should_run_framecycle = false;
                         mp_app_state->b_app_running = false;
 
                         break;
                     }
 
                     default: {
-                        Log(LogWarning, "[XrProgram] SESSION_STATE_CHANGED: Unhandled event: %i", pxr_session_state_changed->state);
+                        Log(LogWarning, "[XrProgram] SESSION_STATE_CHANGED: Unhandled event: %i",
+                            pxr_session_state_changed->state);
                         break;
                     }
                 }
@@ -721,16 +956,18 @@ void Program::Tick() {
             }
 
             case XR_TYPE_EVENT_DATA_EVENTS_LOST: {
-                XrEventDataEventsLost *p_events_lost = reinterpret_cast<XrEventDataEventsLost *>(&xr_event_buffer);
-                Log(LogWarning, "[XrProgram] EVENTS_LOST: Lost events: %i", p_events_lost->lostEventCount);
+                auto *p_events_lost = reinterpret_cast<XrEventDataEventsLost *>(&xr_event_buffer);
+                Log(LogWarning, "[XrProgram] EVENTS_LOST: Lost events: %i",
+                    p_events_lost->lostEventCount);
                 break;
             }
 
             case XR_TYPE_EVENT_DATA_INSTANCE_LOSS_PENDING: {
-                XrEventDataInstanceLossPending *pxr_instance_loss_pending = reinterpret_cast<XrEventDataInstanceLossPending *>(&xr_event_buffer);
+                auto *pxr_instance_loss_pending = reinterpret_cast<XrEventDataInstanceLossPending *>(&xr_event_buffer);
 
                 mp_app_state->b_app_running = false;
-                mb_session_running = false;
+                mb_is_session_running = false;
+                mb_should_run_framecycle = false;
                 break;
             }
 
@@ -738,20 +975,147 @@ void Program::Tick() {
                 break;
             }
         }
+
+        result = xrPollEvent(mh_xrinstance, &xr_event_buffer);
     }
 
-    Log("hi");
+    if (!mb_should_run_framecycle) {
+        return;
+    }
 
-    XrFrameState xr_frame_state{XR_TYPE_FRAME_STATE};
+    XrFrameState frame_state{XR_TYPE_FRAME_STATE};
     {//Wait frame
-        XrFrameWaitInfo xr_frame_wait_info = {
+        XrFrameWaitInfo frame_wait_info = {
                 .type = XR_TYPE_FRAME_WAIT_INFO,
         };
-        v_qualify_xr(xrWaitFrame(mxr_session, &xr_frame_wait_info, &xr_frame_state));
+        v_qualify_xr(xrWaitFrame(mh_xrsession, &frame_wait_info, &frame_state));
     }
 
-    {
+    if (!frame_state.shouldRender) {
+        return;
+    }
 
+    {//graphics
+        XrFrameBeginInfo frame_begin_info = {
+                .type = XR_TYPE_FRAME_BEGIN_INFO,
+        };
+        v_qualify_xr(xrBeginFrame(mh_xrsession, &frame_begin_info));
+
+        std::vector<XrCompositionLayerProjectionView> v_composition_layer_projection_views(
+                mv_views.size());
+
+        for (int i = 0; i < mv_views.size(); i++) {
+
+            //TODO: double buffer
+            v_qualify_vk(vkWaitForFences(mh_vkdevice, 1, &mh_fence_exec, VK_TRUE, UINT64_MAX));
+            v_qualify_vk(vkResetFences(mh_vkdevice, 1, &mh_fence_exec));
+
+            v_qualify_vk(vkResetCommandBuffer(mh_vkcommand_buffer, 0));
+
+            XrViewState view_state = {
+                    .type = XR_TYPE_VIEW_STATE,
+            };
+            XrViewLocateInfo view_locate_info = {
+                    .type = XR_TYPE_VIEW_LOCATE_INFO,
+                    .viewConfigurationType = me_app_view_type,
+                    .displayTime = frame_state.predictedDisplayTime,
+                    .space = mmap_reference_spaces[XR_REFERENCE_SPACE_TYPE_STAGE],
+            };
+
+            uint32_t un_out_view_count;
+            v_qualify_xr(
+                    xrLocateViews(mh_xrsession, &view_locate_info, &view_state, mv_views.size(),
+                                  &un_out_view_count, mv_views.data()));
+
+            uint32_t un_index = 0;
+            XrSwapchainImageAcquireInfo swapchain_image_acquire_info = {
+                    .type = XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO,
+            };
+            v_qualify_xr(
+                    xrAcquireSwapchainImage(mv_sccolor[i].swapchain, &swapchain_image_acquire_info,
+                                            &un_index));
+
+            XrSwapchainImageWaitInfo swapchain_image_wait_info = {
+                    .type = XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO,
+                    .timeout = XR_INFINITE_DURATION,
+            };
+            v_qualify_xr(xrWaitSwapchainImage(mv_sccolor[i].swapchain, &swapchain_image_wait_info));
+
+            VkCommandBufferBeginInfo command_buffer_begin_info = {
+                    .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+                    .pInheritanceInfo = nullptr,
+            };
+            v_qualify_vk(vkBeginCommandBuffer(mh_vkcommand_buffer, &command_buffer_begin_info));
+
+            VkClearValue clear_value = {{{0.f, 0.f, 0.f, 1.f}}};
+            VkRenderPassBeginInfo render_pass_begin_info = {
+                    .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+                    .renderPass = mh_vkrender_pass,
+                    .framebuffer = mv_sccolor[i].v_framebuffers[un_index],
+                    .renderArea = {
+                            .offset = {0, 0},
+                            .extent = mv_sccolor[i].extent
+                    },
+                    .clearValueCount = 1,
+                    .pClearValues = &clear_value
+            };
+            vkCmdBeginRenderPass(mh_vkcommand_buffer, &render_pass_begin_info,
+                                 VK_SUBPASS_CONTENTS_INLINE);
+
+            vkCmdBindPipeline(mh_vkcommand_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                              mh_vkgraphics_pipeline);
+            vkCmdDraw(mh_vkcommand_buffer, 3, 1, 0, 0);
+
+            vkCmdEndRenderPass(mh_vkcommand_buffer);
+            v_qualify_vk(vkEndCommandBuffer(mh_vkcommand_buffer));
+
+            XrSwapchainImageReleaseInfo swapchain_image_release_info = {
+                    .type = XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO,
+            };
+            v_qualify_xr(xrReleaseSwapchainImage(mv_sccolor[i].swapchain,
+                                                 &swapchain_image_release_info));
+
+            v_composition_layer_projection_views[i] = {
+                    .type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW,
+                    .pose = mv_views[i].pose,
+                    .fov = mv_views[i].fov,
+                    .subImage = {
+                            .swapchain = mv_sccolor[i].swapchain,
+                            .imageRect = {
+                                    .offset = {0, 0},
+                                    .extent = {(int32_t) mv_sccolor[i].extent.width,
+                                               (int32_t) mv_sccolor[i].extent.height}
+                            },
+                    }
+            };
+
+            VkSubmitInfo submit_info = {
+                    .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+                    .commandBufferCount = 1,
+                    .pCommandBuffers = &mh_vkcommand_buffer,
+            };
+            v_qualify_vk(vkQueueSubmit(mh_vkqueue, 1, &submit_info, mh_fence_exec));
+        }
+
+        XrCompositionLayerProjection composition_layer_projection = {
+                .type = XR_TYPE_COMPOSITION_LAYER_PROJECTION,
+                .space = mmap_reference_spaces[XR_REFERENCE_SPACE_TYPE_STAGE],
+                .viewCount = (uint32_t) mv_views.size(),
+                .views = v_composition_layer_projection_views.data(),
+        };
+
+        std::vector<XrCompositionLayerBaseHeader *> v_layers_base{};
+        v_layers_base.push_back(
+                reinterpret_cast<XrCompositionLayerBaseHeader *>(&composition_layer_projection));
+
+        XrFrameEndInfo frame_end_info = {
+                .type = XR_TYPE_FRAME_END_INFO,
+                .displayTime = frame_state.predictedDisplayTime,
+                .environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE,
+                .layerCount = (uint32_t) v_layers_base.size(),
+                .layers = v_layers_base.data()
+        };
+        v_qualify_xr(xrEndFrame(mh_xrsession, &frame_end_info));
     }
 }
 

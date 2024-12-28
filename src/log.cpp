@@ -31,7 +31,7 @@ void LogHelper( ELogLevel level, const char *pMsgFormat, va_list &args )
         }
     }
 
-    __android_log_vprint( priority, "mynativeapp", pMsgFormat, args );
+    __android_log_vprint( priority, "qov", pMsgFormat, args );
 
     va_end( args );
 }

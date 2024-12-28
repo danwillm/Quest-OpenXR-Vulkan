@@ -89,7 +89,7 @@ void android_main(struct android_app *app) {
 
     if (!program.BInit()) {
         Log(LogError, "[android_main] Failed to initialize openxr program. Aborting.");
-
+        ANativeActivity_finish(app->activity);
         goto finish;
     }
 
@@ -108,12 +108,15 @@ void android_main(struct android_app *app) {
             if (source != nullptr) {
                 source->process(app, source);
             }
+
+            if (!g_app_state.b_app_running) {
+                ANativeActivity_finish(app->activity);
+            }
         }
 
         program.Tick();
     }
 
     finish:
-    ANativeActivity_finish(app->activity);
     java_vm->DetachCurrentThread();
 }
