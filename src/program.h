@@ -68,6 +68,9 @@ private:
     VkRenderPass mh_vkrender_pass;
     VkPipeline mh_vkgraphics_pipeline;
 
+    VkBuffer mh_vkbuffer_vertex;
+    VkDeviceMemory mh_vkmemory_vertex;
+
     VkCommandPool mh_command_pool;
     std::vector<VkCommandBuffer> mv_command_buffers;
     VkFence mh_fence_exec;

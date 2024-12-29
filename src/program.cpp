@@ -416,10 +416,9 @@ bool Program::BInit() {
 
         me_app_view_type = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
 
-        if (std::find(v_view_config_types.begin(), v_view_config_types.end(),
-                      XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO) == v_view_config_types.end()) {
-            throw std::runtime_error(
-                    "[XrProgram] View configuration STEREO was not supported on runtime");
+        if (std::find(v_view_config_types.begin(), v_view_config_types.end(), XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO) ==
+            v_view_config_types.end()) {
+            throw std::runtime_error("[XrProgram] View configuration STEREO was not supported on runtime");
         }
 
         uint32_t un_view_config_views_count;
@@ -428,11 +427,10 @@ bool Program::BInit() {
                                                   0, &un_view_config_views_count, nullptr));
 
         mv_view_config_views.resize(un_view_config_views_count, {XR_TYPE_VIEW_CONFIGURATION_VIEW});
-        b_qualify_xr(
-                xrEnumerateViewConfigurationViews(mh_xrinstance, mh_xrsystem_id, me_app_view_type,
-                                                  mv_view_config_views.size(),
-                                                  &un_view_config_views_count,
-                                                  mv_view_config_views.data()));
+        b_qualify_xr(xrEnumerateViewConfigurationViews(mh_xrinstance, mh_xrsystem_id, me_app_view_type,
+                                                       mv_view_config_views.size(),
+                                                       &un_view_config_views_count,
+                                                       mv_view_config_views.data()));
 
         mv_views.resize(un_view_config_views_count, {XR_TYPE_VIEW});
     }
@@ -606,152 +604,222 @@ bool Program::BInit() {
         b_qualify_vk(vkAllocateCommandBuffers(mh_vkdevice, &command_buffer_allocate_info,
                                               mv_command_buffers.data()));
 
+        VkPipelineShaderStageCreateInfo pipeline_shader_stage_create_info[] = {
+                {
+                        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                        .stage = VK_SHADER_STAGE_VERTEX_BIT,
+                        .module = vksm_vertex,
+                        .pName = "main"
+                },
+                {
+                        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                        .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+                        .module = vksm_fragment,
+                        .pName = "main"
+                }
+        };
+
+        std::vector<VkDynamicState> vvk_dynamic_states = {
+        };
+
+        VkPipelineDynamicStateCreateInfo dynamic_state_create_info = {
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+                .dynamicStateCount = static_cast<uint32_t>(vvk_dynamic_states.size()),
+                .pDynamicStates = vvk_dynamic_states.data()
+        };
+
+        struct Vertex {
+            XrVector2f vec2_position;
+            XrVector3f vec3_color;
+        };
+
+        const std::vector<Vertex> gv_vertices = {
+                {{0.0f,  -0.5f}, {1.0f, 0.0f, 0.0f}},
+                {{0.5f,  0.5f},  {0.0f, 1.0f, 0.0f}},
+                {{-0.5f, 0.5f},  {0.0f, 0.0f, 1.0f}}
+        };
+
+        VkVertexInputBindingDescription vertex_binding_description = {
+                .binding = 0,
+                .stride = sizeof(Vertex),
+                .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
+        };
+
+        std::array<VkVertexInputAttributeDescription, 2> v_vertex_attribute_descriptions = {
+                VkVertexInputAttributeDescription{
+                        .location = 0,
+                        .binding = 0,
+                        .format = VK_FORMAT_R32G32_SFLOAT,
+                        .offset = offsetof(Vertex, vec2_position)
+                },
+                VkVertexInputAttributeDescription{
+                        .location = 1,
+                        .binding = 0,
+                        .format = VK_FORMAT_R32G32B32A32_SFLOAT,
+                        .offset = offsetof(Vertex, vec3_color),
+                }
+        };
+
+        VkPipelineVertexInputStateCreateInfo vertex_input_state_create_info = {
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+                .vertexBindingDescriptionCount = 1,
+                .pVertexBindingDescriptions = &vertex_binding_description,
+                .vertexAttributeDescriptionCount = (uint32_t) v_vertex_attribute_descriptions.size(),
+                .pVertexAttributeDescriptions = v_vertex_attribute_descriptions.data(),
+        };
+
+        VkPipelineInputAssemblyStateCreateInfo input_assembly_create_info = {
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+                .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+                .primitiveRestartEnable = VK_FALSE,
+        };
+
+        VkViewport viewport = {
+                .width = (float) mv_sccolor[0].extent.width,
+                .height = (float) mv_sccolor[0].extent.height,
+                .minDepth = 0.f,
+                .maxDepth = 1.f
+        };
+        VkRect2D scissor = {
+                .offset = {0, 0},
+                .extent = mv_sccolor[0].extent,
+        };
+        VkPipelineViewportStateCreateInfo viewport_state_create_info = {
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+                .viewportCount = 1,
+                .pViewports = &viewport,
+                .scissorCount = 1,
+                .pScissors = &scissor
+        };
+
+        VkPipelineRasterizationStateCreateInfo rasterization_state_create_info = {
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+                .depthClampEnable = VK_FALSE,
+                .polygonMode = VK_POLYGON_MODE_FILL,
+                .cullMode = VK_CULL_MODE_BACK_BIT,
+                .frontFace = VK_FRONT_FACE_CLOCKWISE,
+                .depthBiasEnable = VK_FALSE,
+                .lineWidth = 1.f,
+        };
+
+        VkPipelineMultisampleStateCreateInfo multisample_state_create_info = {
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+                .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+        };
+
+        VkPipelineColorBlendAttachmentState color_blend_attachment_state = {
+                .blendEnable = VK_FALSE,
+                .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                  VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+        };
+        VkPipelineColorBlendStateCreateInfo color_blend_state_create_info = {
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+                .logicOpEnable = VK_FALSE,
+                .logicOp = VK_LOGIC_OP_COPY,
+                .attachmentCount = 1,
+                .pAttachments = &color_blend_attachment_state,
+        };
+
+        VkPipelineLayoutCreateInfo pipeline_layout_create_info = {
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+                .setLayoutCount = 0,
+                .pSetLayouts = nullptr,
+                .pushConstantRangeCount = 0,
+                .pPushConstantRanges = nullptr,
+        };
+        b_qualify_vk(vkCreatePipelineLayout(mh_vkdevice, &pipeline_layout_create_info, nullptr, &mh_vkpipeline_layout));
+
+        VkAttachmentDescription color_attachment = {
+                .format = mv_sccolor[0].vk_format,
+                .samples = VK_SAMPLE_COUNT_1_BIT,
+                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                .stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE,
+                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+        };
+        VkAttachmentReference color_attachment_reference = {
+                .attachment = 0,
+                .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        };
+        VkSubpassDescription subpass_description = {
+                .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+                .colorAttachmentCount = 1,
+                .pColorAttachments = &color_attachment_reference,
+        };
+
+        VkRenderPassCreateInfo render_pass_create_info = {
+                .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+                .attachmentCount = 1,
+                .pAttachments = &color_attachment,
+                .subpassCount = 1,
+                .pSubpasses = &subpass_description,
+        };
+        b_qualify_vk(vkCreateRenderPass(mh_vkdevice, &render_pass_create_info, nullptr, &mh_vkrender_pass));
+
+        VkGraphicsPipelineCreateInfo pipeline_create_info = {
+                .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+                .stageCount = 2,
+                .pStages = pipeline_shader_stage_create_info,
+                .pVertexInputState = &vertex_input_state_create_info,
+                .pInputAssemblyState = &input_assembly_create_info,
+                .pViewportState = &viewport_state_create_info,
+                .pRasterizationState = &rasterization_state_create_info,
+                .pMultisampleState = &multisample_state_create_info,
+                .pColorBlendState = &color_blend_state_create_info,
+                .pDynamicState = &dynamic_state_create_info,
+                .layout = mh_vkpipeline_layout,
+                .renderPass = mh_vkrender_pass,
+                .subpass = 0,
+                .basePipelineHandle = VK_NULL_HANDLE,
+                .basePipelineIndex = -1,
+        };
+        b_qualify_vk(vkCreateGraphicsPipelines(mh_vkdevice, VK_NULL_HANDLE, 1, &pipeline_create_info, nullptr, &mh_vkgraphics_pipeline));
+
+        {//Buffer creation
+            VkBufferCreateInfo buffer_create_info = {
+                    .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                    .size = sizeof(gv_vertices[0]) * gv_vertices.size(),
+                    .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                    .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+
+            };
+            b_qualify_vk(vkCreateBuffer(mh_vkdevice, &buffer_create_info, nullptr, &mh_vkbuffer_vertex));
+
+            VkMemoryRequirements memory_requirements;
+            vkGetBufferMemoryRequirements(mh_vkdevice, mh_vkbuffer_vertex, &memory_requirements);
+
+            VkPhysicalDeviceMemoryProperties memory_properties;
+            vkGetPhysicalDeviceMemoryProperties(mh_vkphysical_device, &memory_properties);
+
+            VkMemoryPropertyFlags property_flags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+            uint32_t un_memory_index = 0;
+            for (uint32_t i = 0; i < memory_properties.memoryTypeCount; i++) {
+                if ((memory_requirements.memoryTypeBits & (1 << i)) &&
+                    (memory_properties.memoryTypes[i].propertyFlags & property_flags) == property_flags) {
+                    un_memory_index = i;
+                    break;
+                }
+            }
+
+            VkMemoryAllocateInfo memory_allocate_info = {
+                    .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+                    .allocationSize = memory_requirements.size,
+                    .memoryTypeIndex = un_memory_index,
+            };
+
+            b_qualify_vk(vkAllocateMemory(mh_vkdevice, &memory_allocate_info, nullptr,
+                                          &mh_vkmemory_vertex));
+            b_qualify_vk(vkBindBufferMemory(mh_vkdevice, mh_vkbuffer_vertex, mh_vkmemory_vertex, 0));
+
+            void *vp_data;
+            b_qualify_vk(vkMapMemory(mh_vkdevice, mh_vkmemory_vertex, 0, buffer_create_info.size, 0, &vp_data));
+            memcpy(vp_data, gv_vertices.data(), (size_t) buffer_create_info.size);
+            vkUnmapMemory(mh_vkdevice, mh_vkmemory_vertex);
+        }
+
         for (int i = 0; i < mv_views.size(); i++) {
-            VkPipelineShaderStageCreateInfo pipeline_shader_stage_create_info[] = {
-                    {
-                            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                            .stage = VK_SHADER_STAGE_VERTEX_BIT,
-                            .module = vksm_vertex,
-                            .pName = "main"
-                    },
-                    {
-                            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                            .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-                            .module = vksm_fragment,
-                            .pName = "main"
-                    }
-            };
-
-            std::vector<VkDynamicState> vvk_dynamic_states = {
-            };
-
-            VkPipelineDynamicStateCreateInfo dynamic_state_create_info = {
-                    .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-                    .dynamicStateCount = static_cast<uint32_t>(vvk_dynamic_states.size()),
-                    .pDynamicStates = vvk_dynamic_states.data()
-            };
-
-            VkPipelineVertexInputStateCreateInfo vertex_input_state_create_info = {
-                    .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-                    .vertexBindingDescriptionCount = 0,
-                    .pVertexBindingDescriptions = nullptr,
-                    .vertexAttributeDescriptionCount = 0,
-                    .pVertexAttributeDescriptions = nullptr,
-            };
-
-            VkPipelineInputAssemblyStateCreateInfo input_assembly_create_info = {
-                    .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-                    .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-                    .primitiveRestartEnable = VK_FALSE,
-            };
-
-            VkViewport viewport = {
-                    .width = (float) mv_sccolor[i].extent.width,
-                    .height = (float) mv_sccolor[i].extent.height,
-                    .minDepth = 0.f,
-                    .maxDepth = 1.f
-            };
-            VkRect2D scissor = {
-                    .offset = {0, 0},
-                    .extent = mv_sccolor[i].extent,
-            };
-            VkPipelineViewportStateCreateInfo viewport_state_create_info = {
-                    .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-                    .viewportCount = 1,
-                    .pViewports = &viewport,
-                    .scissorCount = 1,
-                    .pScissors = &scissor
-            };
-
-            VkPipelineRasterizationStateCreateInfo rasterization_state_create_info = {
-                    .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-                    .depthClampEnable = VK_FALSE,
-                    .polygonMode = VK_POLYGON_MODE_FILL,
-                    .cullMode = VK_CULL_MODE_BACK_BIT,
-                    .frontFace = VK_FRONT_FACE_CLOCKWISE,
-                    .depthBiasEnable = VK_FALSE,
-                    .lineWidth = 1.f,
-            };
-
-            VkPipelineMultisampleStateCreateInfo multisample_state_create_info = {
-                    .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-                    .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
-            };
-
-            VkPipelineColorBlendAttachmentState color_blend_attachment_state = {
-                    .blendEnable = VK_FALSE,
-                    .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-                                      VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
-            };
-            VkPipelineColorBlendStateCreateInfo color_blend_state_create_info = {
-                    .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-                    .logicOpEnable = VK_FALSE,
-                    .logicOp = VK_LOGIC_OP_COPY,
-                    .attachmentCount = 1,
-                    .pAttachments = &color_blend_attachment_state,
-            };
-
-            VkPipelineLayoutCreateInfo pipeline_layout_create_info = {
-                    .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-                    .setLayoutCount = 0,
-                    .pSetLayouts = nullptr,
-                    .pushConstantRangeCount = 0,
-                    .pPushConstantRanges = nullptr,
-            };
-            b_qualify_vk(vkCreatePipelineLayout(mh_vkdevice, &pipeline_layout_create_info, nullptr,
-                                                &mh_vkpipeline_layout));
-
-            VkAttachmentDescription color_attachment = {
-                    .format = mv_sccolor[i].vk_format,
-                    .samples = VK_SAMPLE_COUNT_1_BIT,
-                    .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-                    .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-                    .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                    .stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE,
-                    .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                    .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-            };
-            VkAttachmentReference color_attachment_reference = {
-                    .attachment = 0,
-                    .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            };
-            VkSubpassDescription subpass_description = {
-                    .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-                    .colorAttachmentCount = 1,
-                    .pColorAttachments = &color_attachment_reference,
-            };
-
-            VkRenderPassCreateInfo render_pass_create_info = {
-                    .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-                    .attachmentCount = 1,
-                    .pAttachments = &color_attachment,
-                    .subpassCount = 1,
-                    .pSubpasses = &subpass_description,
-            };
-            b_qualify_vk(vkCreateRenderPass(mh_vkdevice, &render_pass_create_info, nullptr,
-                                            &mh_vkrender_pass));
-
-            VkGraphicsPipelineCreateInfo pipeline_create_info = {
-                    .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-                    .stageCount = 2,
-                    .pStages = pipeline_shader_stage_create_info,
-                    .pVertexInputState = &vertex_input_state_create_info,
-                    .pInputAssemblyState = &input_assembly_create_info,
-                    .pViewportState = &viewport_state_create_info,
-                    .pRasterizationState = &rasterization_state_create_info,
-                    .pMultisampleState = &multisample_state_create_info,
-                    .pColorBlendState = &color_blend_state_create_info,
-                    .pDynamicState = &dynamic_state_create_info,
-                    .layout = mh_vkpipeline_layout,
-                    .renderPass = mh_vkrender_pass,
-                    .subpass = 0,
-                    .basePipelineHandle = VK_NULL_HANDLE,
-                    .basePipelineIndex = -1,
-            };
-            b_qualify_vk(
-                    vkCreateGraphicsPipelines(mh_vkdevice, VK_NULL_HANDLE, 1, &pipeline_create_info,
-                                              nullptr, &mh_vkgraphics_pipeline));
-
             mv_sccolor[i].v_framebuffers.resize(mv_sccolor[i].v_images.size());
             for (size_t k = 0; k < mv_sccolor[i].v_images.size(); k++) {
                 VkImageView v_attachments[] = {
@@ -767,8 +835,7 @@ bool Program::BInit() {
                         .height = mv_sccolor[i].extent.height,
                         .layers = 1,
                 };
-                b_qualify_vk(vkCreateFramebuffer(mh_vkdevice, &frame_buffer_create_info, nullptr,
-                                                 &mv_sccolor[i].v_framebuffers[k]));
+                b_qualify_vk(vkCreateFramebuffer(mh_vkdevice, &frame_buffer_create_info, nullptr, &mv_sccolor[i].v_framebuffers[k]));
             }
         }
 
@@ -777,8 +844,7 @@ bool Program::BInit() {
                     .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
                     .flags = VK_FENCE_CREATE_SIGNALED_BIT,
             };
-            b_qualify_vk(
-                    vkCreateFence(mh_vkdevice, &fence_create_info, nullptr, &mh_fence_exec));
+            b_qualify_vk(vkCreateFence(mh_vkdevice, &fence_create_info, nullptr, &mh_fence_exec));
         }
     }
 
@@ -971,6 +1037,11 @@ void Program::Tick() {
 
             vkCmdBindPipeline(mv_command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS,
                               mh_vkgraphics_pipeline);
+
+            VkBuffer v_vertex_buffers[] = {mh_vkbuffer_vertex};
+            VkDeviceSize v_offsets[] = {0};
+            vkCmdBindVertexBuffers(mv_command_buffers[i], 0, 1, v_vertex_buffers, v_offsets);
+
             vkCmdDraw(mv_command_buffers[i], 3, 1, 0, 0);
 
             vkCmdEndRenderPass(mv_command_buffers[i]);
