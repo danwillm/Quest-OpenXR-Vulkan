@@ -26,6 +26,10 @@ struct SwapchainInfo {
     std::vector<VkFramebuffer> v_framebuffers{};
 };
 
+struct ViewFrameInfo {
+
+};
+
 class Program {
 public:
     Program(android_app *p_app, app_state *p_app_state);
@@ -64,11 +68,9 @@ private:
     VkRenderPass mh_vkrender_pass;
     VkPipeline mh_vkgraphics_pipeline;
 
-    VkCommandPool mh_vkcommand_pool;
-    VkCommandBuffer mh_vkcommand_buffer;
-
+    VkCommandPool mh_command_pool;
+    std::vector<VkCommandBuffer> mv_command_buffers;
     VkFence mh_fence_exec;
-    VkSemaphore mh_semaphore_render_finished;
 
     std::vector<VkViewport> mv_vkviewports{};
 

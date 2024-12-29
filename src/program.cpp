@@ -66,16 +66,6 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL VkDebugCallback(
         void *pUserData) {
 
     ELogLevel logLevel;
-//    if ((messageType & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) ==
-//        VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
-//        logLevel = LogError;
-//    } else if ((messageType & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) ==
-//               VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
-//        logLevel = LogWarning;
-//    } else {
-//        logLevel = LogInfo;
-//    }
-
     switch (messageSeverity) {
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
             logLevel = LogError;
@@ -598,8 +588,25 @@ bool Program::BInit() {
             AAsset_close(passet_fragment);
         }
 
-        //TODO: split this up
-        for (int i = 0; i < 2; i++) {
+        VkCommandPoolCreateInfo command_pool_create_info = {
+                .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+                .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+                .queueFamilyIndex = mun_queue_family
+        };
+        b_qualify_vk(vkCreateCommandPool(mh_vkdevice, &command_pool_create_info, nullptr,
+                                         &mh_command_pool));
+
+        mv_command_buffers.resize(mv_views.size());
+        VkCommandBufferAllocateInfo command_buffer_allocate_info = {
+                .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+                .commandPool = mh_command_pool,
+                .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+                .commandBufferCount = (uint32_t) mv_command_buffers.size(),
+        };
+        b_qualify_vk(vkAllocateCommandBuffers(mh_vkdevice, &command_buffer_allocate_info,
+                                              mv_command_buffers.data()));
+
+        for (int i = 0; i < mv_views.size(); i++) {
             VkPipelineShaderStageCreateInfo pipeline_shader_stage_create_info[] = {
                     {
                             .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -765,36 +772,14 @@ bool Program::BInit() {
             }
         }
 
-        VkCommandPoolCreateInfo command_pool_create_info = {
-                .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-                .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-                .queueFamilyIndex = mun_queue_family
-        };
-        b_qualify_vk(vkCreateCommandPool(mh_vkdevice, &command_pool_create_info, nullptr,
-                                         &mh_vkcommand_pool));
-
-        VkCommandBufferAllocateInfo command_buffer_allocate_info = {
-                .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-                .commandPool = mh_vkcommand_pool,
-                .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-                .commandBufferCount = 1
-        };
-        b_qualify_vk(vkAllocateCommandBuffers(mh_vkdevice, &command_buffer_allocate_info,
-                                              &mh_vkcommand_buffer));
-    }
-
-    {//Synchronisation setup
-        VkFenceCreateInfo fence_create_info = {
-                .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-                .flags = VK_FENCE_CREATE_SIGNALED_BIT,
-        };
-        b_qualify_vk(vkCreateFence(mh_vkdevice, &fence_create_info, nullptr, &mh_fence_exec));
-
-        VkSemaphoreCreateInfo semaphore_create_info = {
-                .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-        };
-        b_qualify_vk(vkCreateSemaphore(mh_vkdevice, &semaphore_create_info, nullptr,
-                                       &mh_semaphore_render_finished));
+        {//Synchronisation
+            VkFenceCreateInfo fence_create_info = {
+                    .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+                    .flags = VK_FENCE_CREATE_SIGNALED_BIT,
+            };
+            b_qualify_vk(
+                    vkCreateFence(mh_vkdevice, &fence_create_info, nullptr, &mh_fence_exec));
+        }
     }
 
     return true;
@@ -927,14 +912,12 @@ void Program::Tick() {
         std::vector<XrCompositionLayerProjectionView> v_composition_layer_projection_views(
                 mv_views.size());
 
+        v_qualify_vk(vkWaitForFences(mh_vkdevice, 1, &mh_fence_exec, VK_TRUE, UINT64_MAX));
+        v_qualify_vk(vkResetFences(mh_vkdevice, 1, &mh_fence_exec));
+
+        v_qualify_vk(vkResetCommandPool(mh_vkdevice, mh_command_pool, 0));
+
         for (int i = 0; i < mv_views.size(); i++) {
-
-            //TODO: double buffer
-            v_qualify_vk(vkWaitForFences(mh_vkdevice, 1, &mh_fence_exec, VK_TRUE, UINT64_MAX));
-            v_qualify_vk(vkResetFences(mh_vkdevice, 1, &mh_fence_exec));
-
-            v_qualify_vk(vkResetCommandBuffer(mh_vkcommand_buffer, 0));
-
             XrViewState view_state = {
                     .type = XR_TYPE_VIEW_STATE,
             };
@@ -966,9 +949,10 @@ void Program::Tick() {
 
             VkCommandBufferBeginInfo command_buffer_begin_info = {
                     .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+                    .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
                     .pInheritanceInfo = nullptr,
             };
-            v_qualify_vk(vkBeginCommandBuffer(mh_vkcommand_buffer, &command_buffer_begin_info));
+            v_qualify_vk(vkBeginCommandBuffer(mv_command_buffers[i], &command_buffer_begin_info));
 
             VkClearValue clear_value = {{{0.f, 0.f, 0.f, 1.f}}};
             VkRenderPassBeginInfo render_pass_begin_info = {
@@ -982,15 +966,15 @@ void Program::Tick() {
                     .clearValueCount = 1,
                     .pClearValues = &clear_value
             };
-            vkCmdBeginRenderPass(mh_vkcommand_buffer, &render_pass_begin_info,
+            vkCmdBeginRenderPass(mv_command_buffers[i], &render_pass_begin_info,
                                  VK_SUBPASS_CONTENTS_INLINE);
 
-            vkCmdBindPipeline(mh_vkcommand_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+            vkCmdBindPipeline(mv_command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS,
                               mh_vkgraphics_pipeline);
-            vkCmdDraw(mh_vkcommand_buffer, 3, 1, 0, 0);
+            vkCmdDraw(mv_command_buffers[i], 3, 1, 0, 0);
 
-            vkCmdEndRenderPass(mh_vkcommand_buffer);
-            v_qualify_vk(vkEndCommandBuffer(mh_vkcommand_buffer));
+            vkCmdEndRenderPass(mv_command_buffers[i]);
+            v_qualify_vk(vkEndCommandBuffer(mv_command_buffers[i]));
 
             XrSwapchainImageReleaseInfo swapchain_image_release_info = {
                     .type = XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO,
@@ -1011,14 +995,14 @@ void Program::Tick() {
                             },
                     }
             };
-
-            VkSubmitInfo submit_info = {
-                    .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-                    .commandBufferCount = 1,
-                    .pCommandBuffers = &mh_vkcommand_buffer,
-            };
-            v_qualify_vk(vkQueueSubmit(mh_vkqueue, 1, &submit_info, mh_fence_exec));
         }
+
+        VkSubmitInfo submit_info = {
+                .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+                .commandBufferCount = (uint32_t) mv_command_buffers.size(),
+                .pCommandBuffers = mv_command_buffers.data(),
+        };
+        v_qualify_vk(vkQueueSubmit(mh_vkqueue, 1, &submit_info, mh_fence_exec));
 
         XrCompositionLayerProjection composition_layer_projection = {
                 .type = XR_TYPE_COMPOSITION_LAYER_PROJECTION,
