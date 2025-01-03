@@ -71,6 +71,13 @@ private:
     VkBuffer mh_vkbuffer_vertex;
     VkDeviceMemory mh_vkmemory_vertex;
 
+    VkDescriptorSetLayout mh_vkdescriptor_set_layout;
+    VkDescriptorPool mh_vkdescriptor_pool;
+    std::vector<VkDescriptorSet> mv_vkdescriptor_sets;
+    std::vector<VkBuffer> mv_vkbuffer_uniforms;
+    std::vector<VkDeviceMemory> mv_vkmemory_uniforms;
+    std::vector<void*> mv_vpbuffer_mapped_uniforms;
+
     VkCommandPool mh_command_pool;
     std::vector<VkCommandBuffer> mv_command_buffers;
     VkFence mh_fence_exec;

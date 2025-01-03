@@ -3,12 +3,57 @@
 #include <string>
 #include <vector>
 
+#include "xr_linear.h"
+
 #include "log.h"
 
 constexpr XrPosef k_xr_pose_identity = {
         .orientation = {
-                .w= 1.f,
+                .w = 1.f,
         },
+};
+struct Vertex {
+    XrVector3f vec3_position;
+    XrVector4f vec4_color;
+};
+
+static std::vector<Vertex> gv_vertices = {
+        {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 1.0f, 1.0f,}},
+        {{0.5f,  -0.5f, -0.5f}, {1.0f, 0.0f, 1.0f, 1.0f,}},
+        {{0.5f,  0.5f,  -0.5f}, {1.0f, 0.0f, 1.0f, 1.0f,}},
+        {{0.5f,  0.5f,  -0.5f}, {1.0f, 0.0f, 1.0f, 1.0f,}},
+        {{-0.5f, 0.5f,  -0.5f}, {1.0f, 0.0f, 1.0f, 1.0f,}},
+        {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 1.0f, 1.0f,}}, //
+        {{-0.5f, -0.5f, 0.5f},  {1.0f, 0.0f, 0.0f, 1.0f,}},
+        {{0.5f,  -0.5f, 0.5f},  {1.0f, 0.0f, 0.0f, 1.0f,}},
+        {{0.5f,  0.5f,  0.5f},  {1.0f, 0.0f, 0.0f, 1.0f,}},
+        {{0.5f,  0.5f,  0.5f},  {1.0f, 0.0f, 0.0f, 1.0f,}},
+        {{-0.5f, 0.5f,  0.5f},  {1.0f, 0.0f, 0.0f, 1.0f,}},
+        {{-0.5f, -0.5f, 0.5f},  {1.0f, 0.0f, 0.0f, 1.0f,}},//
+        {{-0.5f, 0.5f,  0.5f},  {1.0f, 1.0f, 0.0f, 1.0f,}},
+        {{-0.5f, 0.5f,  -0.5f}, {1.0f, 1.0f, 0.0f, 1.0f,}},
+        {{-0.5f, -0.5f, -0.5f}, {1.0f, 1.0f, 0.0f, 1.0f,}},
+        {{-0.5f, -0.5f, -0.5f}, {1.0f, 1.0f, 0.0f, 1.0f,}},
+        {{-0.5f, -0.5f, 0.5f},  {1.0f, 1.0f, 0.0f, 1.0f,}},
+        {{-0.5f, 0.5f,  0.5f},  {1.0f, 1.0f, 0.0f, 1.0f,}},//
+        {{0.5f,  0.5f,  0.5f},  {1.0f, 1.0f, 0.0f, 1.0f,}},
+        {{0.5f,  0.5f,  -0.5f}, {1.0f, 1.0f, 0.0f, 1.0f,}},
+        {{0.5f,  -0.5f, -0.5f}, {1.0f, 1.0f, 0.0f, 1.0f,}},
+        {{0.5f,  -0.5f, -0.5f}, {1.0f, 1.0f, 0.0f, 1.0f,}},
+        {{0.5f,  -0.5f, 0.5f},  {1.0f, 1.0f, 0.0f, 1.0f,}},
+        {{0.5f,  0.5f,  0.5f},  {1.0f, 1.0f, 0.0f, 1.0f,}}, //
+        {{-0.5f, -0.5f, -0.5f}, {0.0f, 0.0f, 1.0f, 1.0f,}},
+        {{0.5f,  -0.5f, -0.5f}, {0.0f, 0.0f, 1.0f, 1.0f,}},
+        {{0.5f,  -0.5f, 0.5f},  {0.0f, 0.0f, 1.0f, 1.0f,}},
+        {{0.5f,  -0.5f, 0.5f},  {0.0f, 0.0f, 1.0f, 1.0f,}},
+        {{-0.5f, -0.5f, 0.5f},  {0.0f, 0.0f, 1.0f, 1.0f,}},
+        {{-0.5f, -0.5f, -0.5f}, {0.0f, 0.0f, 1.0f, 1.0f,}}, //
+        {{-0.5f, 0.5f,  -0.5f}, {1.0f, 1.0f, 1.0f, 1.0f,}},
+        {{0.5f,  0.5f,  -0.5f}, {1.0f, 1.0f, 1.0f, 1.0f,}},
+        {{0.5f,  0.5f,  0.5f},  {1.0f, 1.0f, 1.0f, 1.0f,}},
+        {{0.5f,  0.5f,  0.5f},  {1.0f, 1.0f, 1.0f, 1.0f,}},
+        {{-0.5f, 0.5f,  0.5f},  {1.0f, 1.0f, 1.0f, 1.0f,}},
+        {{-0.5f, 0.5f,  -0.5f}, {1.0f, 1.0f, 1.0f, 1.0f,}},
 };
 
 #define b_qualify_xr(x) do {                                            \
@@ -628,17 +673,6 @@ bool Program::BInit() {
                 .pDynamicStates = vvk_dynamic_states.data()
         };
 
-        struct Vertex {
-            XrVector2f vec2_position;
-            XrVector3f vec3_color;
-        };
-
-        const std::vector<Vertex> gv_vertices = {
-                {{0.0f,  -0.5f}, {1.0f, 0.0f, 0.0f}},
-                {{0.5f,  0.5f},  {0.0f, 1.0f, 0.0f}},
-                {{-0.5f, 0.5f},  {0.0f, 0.0f, 1.0f}}
-        };
-
         VkVertexInputBindingDescription vertex_binding_description = {
                 .binding = 0,
                 .stride = sizeof(Vertex),
@@ -649,14 +683,14 @@ bool Program::BInit() {
                 VkVertexInputAttributeDescription{
                         .location = 0,
                         .binding = 0,
-                        .format = VK_FORMAT_R32G32_SFLOAT,
-                        .offset = offsetof(Vertex, vec2_position)
+                        .format = VK_FORMAT_R32G32B32_SFLOAT,
+                        .offset = offsetof(Vertex, vec3_position)
                 },
                 VkVertexInputAttributeDescription{
                         .location = 1,
                         .binding = 0,
                         .format = VK_FORMAT_R32G32B32A32_SFLOAT,
-                        .offset = offsetof(Vertex, vec3_color),
+                        .offset = offsetof(Vertex, vec4_color),
                 }
         };
 
@@ -696,8 +730,8 @@ bool Program::BInit() {
                 .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
                 .depthClampEnable = VK_FALSE,
                 .polygonMode = VK_POLYGON_MODE_FILL,
-                .cullMode = VK_CULL_MODE_BACK_BIT,
-                .frontFace = VK_FRONT_FACE_CLOCKWISE,
+                .cullMode = VK_CULL_MODE_NONE,
+                .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
                 .depthBiasEnable = VK_FALSE,
                 .lineWidth = 1.f,
         };
@@ -720,10 +754,25 @@ bool Program::BInit() {
                 .pAttachments = &color_blend_attachment_state,
         };
 
+        VkDescriptorSetLayoutBinding descriptor_set_layout_binding = {
+                .binding = 0,
+                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .descriptorCount = 1,
+                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+                .pImmutableSamplers = nullptr,
+        };
+
+        VkDescriptorSetLayoutCreateInfo descriptor_set_layout_create_info = {
+                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+                .bindingCount = 1,
+                .pBindings = &descriptor_set_layout_binding,
+        };
+        b_qualify_vk(vkCreateDescriptorSetLayout(mh_vkdevice, &descriptor_set_layout_create_info, nullptr, &mh_vkdescriptor_set_layout));
+
         VkPipelineLayoutCreateInfo pipeline_layout_create_info = {
                 .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-                .setLayoutCount = 0,
-                .pSetLayouts = nullptr,
+                .setLayoutCount = 1,
+                .pSetLayouts = &mh_vkdescriptor_set_layout,
                 .pushConstantRangeCount = 0,
                 .pPushConstantRanges = nullptr,
         };
@@ -777,7 +826,7 @@ bool Program::BInit() {
         };
         b_qualify_vk(vkCreateGraphicsPipelines(mh_vkdevice, VK_NULL_HANDLE, 1, &pipeline_create_info, nullptr, &mh_vkgraphics_pipeline));
 
-        {//Buffer creation
+        {//Vertex Buffer creation
             VkBufferCreateInfo buffer_create_info = {
                     .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
                     .size = sizeof(gv_vertices[0]) * gv_vertices.size(),
@@ -817,6 +866,103 @@ bool Program::BInit() {
             b_qualify_vk(vkMapMemory(mh_vkdevice, mh_vkmemory_vertex, 0, buffer_create_info.size, 0, &vp_data));
             memcpy(vp_data, gv_vertices.data(), (size_t) buffer_create_info.size);
             vkUnmapMemory(mh_vkdevice, mh_vkmemory_vertex);
+        }
+
+        {//Uniform buffer creation
+            VkDeviceSize device_buffer_size = sizeof(XrMatrix4x4f);
+
+            mv_vkbuffer_uniforms.resize(mv_views.size());
+            mv_vkmemory_uniforms.resize(mv_views.size());
+            mv_vpbuffer_mapped_uniforms.resize(mv_views.size());
+
+            for (uint32_t i = 0; i < mv_views.size(); i++) {
+
+                VkBufferCreateInfo buffer_create_info = {
+                        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                        .size = sizeof(XrMatrix4x4f),
+                        .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+
+                };
+                b_qualify_vk(vkCreateBuffer(mh_vkdevice, &buffer_create_info, nullptr, &mv_vkbuffer_uniforms[i]));
+
+                VkMemoryRequirements memory_requirements;
+                vkGetBufferMemoryRequirements(mh_vkdevice, mv_vkbuffer_uniforms[i], &memory_requirements);
+
+                VkPhysicalDeviceMemoryProperties memory_properties;
+                vkGetPhysicalDeviceMemoryProperties(mh_vkphysical_device, &memory_properties);
+
+                VkMemoryPropertyFlags property_flags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+                uint32_t un_memory_index = 0;
+                for (uint32_t k = 0; k < memory_properties.memoryTypeCount; k++) {
+                    if ((memory_requirements.memoryTypeBits & (1 << k)) &&
+                        (memory_properties.memoryTypes[k].propertyFlags & property_flags) == property_flags) {
+                        un_memory_index = k;
+                        break;
+                    }
+                }
+
+                VkMemoryAllocateInfo memory_allocate_info = {
+                        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+                        .allocationSize = memory_requirements.size,
+                        .memoryTypeIndex = un_memory_index,
+                };
+
+                b_qualify_vk(vkAllocateMemory(mh_vkdevice, &memory_allocate_info, nullptr,
+                                              &mv_vkmemory_uniforms[i]));
+                b_qualify_vk(vkBindBufferMemory(mh_vkdevice, mv_vkbuffer_uniforms[i], mv_vkmemory_uniforms[i], 0));
+
+                b_qualify_vk(vkMapMemory(mh_vkdevice, mv_vkmemory_uniforms[i], 0, buffer_create_info.size, 0, &mv_vpbuffer_mapped_uniforms[i]));
+            }
+        }
+
+        {//Descriptor pools
+            VkDescriptorPoolSize descriptor_pool_size = {
+                    .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                    .descriptorCount = (uint32_t) mv_views.size(),
+            };
+
+            VkDescriptorPoolCreateInfo descriptor_pool_create_info = {
+                    .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+                    .maxSets = (uint32_t) mv_views.size(),
+                    .poolSizeCount = 1,
+                    .pPoolSizes = &descriptor_pool_size,
+            };
+
+            b_qualify_vk(vkCreateDescriptorPool(mh_vkdevice, &descriptor_pool_create_info, nullptr, &mh_vkdescriptor_pool));
+        }
+
+        {//Descriptor sets
+            std::vector<VkDescriptorSetLayout> v_vkdescriptor_set_layouts(mv_views.size(), mh_vkdescriptor_set_layout);
+            mv_vkdescriptor_sets.resize(mv_views.size());
+
+            VkDescriptorSetAllocateInfo descriptor_set_allocate_info = {
+                    .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+                    .descriptorPool = mh_vkdescriptor_pool,
+                    .descriptorSetCount = (uint32_t) mv_views.size(),
+                    .pSetLayouts = v_vkdescriptor_set_layouts.data(),
+            };
+            b_qualify_vk(vkAllocateDescriptorSets(mh_vkdevice, &descriptor_set_allocate_info, mv_vkdescriptor_sets.data()));
+
+            for (uint32_t i = 0; i < mv_views.size(); i++) {
+                VkDescriptorBufferInfo descriptor_buffer_info = {
+                        .buffer = mv_vkbuffer_uniforms[i],
+                        .offset = 0,
+                        .range = sizeof(XrMatrix4x4f), //or VK_WHOLE_SIZE
+                };
+
+                VkWriteDescriptorSet write_descriptor_set = {
+                        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                        .dstSet = mv_vkdescriptor_sets[i],
+                        .dstBinding = 0,
+                        .dstArrayElement = 0,
+                        .descriptorCount = 1,
+                        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                        .pBufferInfo = &descriptor_buffer_info,
+                };
+
+                vkUpdateDescriptorSets(mh_vkdevice, 1, &write_descriptor_set, 0, nullptr);
+            }
         }
 
         for (int i = 0; i < mv_views.size(); i++) {
@@ -969,21 +1115,8 @@ void Program::Tick() {
         return;
     }
 
-    {//graphics
-        XrFrameBeginInfo frame_begin_info = {
-                .type = XR_TYPE_FRAME_BEGIN_INFO,
-        };
-        v_qualify_xr(xrBeginFrame(mh_xrsession, &frame_begin_info));
-
-        std::vector<XrCompositionLayerProjectionView> v_composition_layer_projection_views(
-                mv_views.size());
-
-        v_qualify_vk(vkWaitForFences(mh_vkdevice, 1, &mh_fence_exec, VK_TRUE, UINT64_MAX));
-        v_qualify_vk(vkResetFences(mh_vkdevice, 1, &mh_fence_exec));
-
-        v_qualify_vk(vkResetCommandPool(mh_vkdevice, mh_command_pool, 0));
-
-        for (int i = 0; i < mv_views.size(); i++) {
+    {//Get views and update uniforms
+        for (uint32_t i = 0; i < mv_views.size(); i++) {
             XrViewState view_state = {
                     .type = XR_TYPE_VIEW_STATE,
             };
@@ -999,6 +1132,37 @@ void Program::Tick() {
                     xrLocateViews(mh_xrsession, &view_locate_info, &view_state, mv_views.size(),
                                   &un_out_view_count, mv_views.data()));
 
+            XrMatrix4x4f mat44_projection;
+            XrMatrix4x4f_CreateProjectionFov(&mat44_projection, GRAPHICS_VULKAN, &mv_views[i].fov, 0, 1.f);
+
+            XrMatrix4x4f mat44_view;
+            XrMatrix4x4f_CreateFromRigidTransform(&mat44_view, &mv_views[i].pose);
+
+            XrMatrix4x4f mat44_inv_view;
+            XrMatrix4x4f_Invert(&mat44_inv_view, &mat44_view);
+
+            XrMatrix4x4f mat44_mvp;
+            XrMatrix4x4f_Multiply(&mat44_mvp, &mat44_projection, &mat44_inv_view);
+
+            memcpy(mv_vpbuffer_mapped_uniforms[i], &mat44_mvp, sizeof(mat44_mvp));
+        }
+    }
+
+    {//graphics
+        XrFrameBeginInfo frame_begin_info = {
+                .type = XR_TYPE_FRAME_BEGIN_INFO,
+        };
+        v_qualify_xr(xrBeginFrame(mh_xrsession, &frame_begin_info));
+
+        std::vector<XrCompositionLayerProjectionView> v_composition_layer_projection_views(
+                mv_views.size());
+
+        v_qualify_vk(vkWaitForFences(mh_vkdevice, 1, &mh_fence_exec, VK_TRUE, UINT64_MAX));
+        v_qualify_vk(vkResetFences(mh_vkdevice, 1, &mh_fence_exec));
+
+        v_qualify_vk(vkResetCommandPool(mh_vkdevice, mh_command_pool, 0));
+
+        for (uint32_t i = 0; i < mv_views.size(); i++) {
             uint32_t un_index = 0;
             XrSwapchainImageAcquireInfo swapchain_image_acquire_info = {
                     .type = XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO,
@@ -1042,7 +1206,10 @@ void Program::Tick() {
             VkDeviceSize v_offsets[] = {0};
             vkCmdBindVertexBuffers(mv_command_buffers[i], 0, 1, v_vertex_buffers, v_offsets);
 
-            vkCmdDraw(mv_command_buffers[i], 3, 1, 0, 0);
+            vkCmdBindDescriptorSets(
+                    mv_command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, mh_vkpipeline_layout, 0, 1, &mv_vkdescriptor_sets[i], 0, nullptr);
+
+            vkCmdDraw(mv_command_buffers[i], gv_vertices.size(), 1, 0, 0);
 
             vkCmdEndRenderPass(mv_command_buffers[i]);
             v_qualify_vk(vkEndCommandBuffer(mv_command_buffers[i]));
