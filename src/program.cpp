@@ -503,54 +503,46 @@ bool Program::BInit() {
             return *it;
         };
 
-        const std::vector<VkFormat> vvk_color_formats = {
+        const std::vector<VkFormat> v_vkformat_color = {
                 VK_FORMAT_B8G8R8A8_SRGB,
                 VK_FORMAT_R8G8B8A8_SRGB,
                 VK_FORMAT_B8G8R8A8_UNORM,
                 VK_FORMAT_R8G8B8A8_UNORM
         };
 
-        int64_t l_supported_color_format = GetSupportedSwapchainFormat(vvk_color_formats,
-                                                                       v_swapchain_formats);
+        int64_t l_supported_color_format = GetSupportedSwapchainFormat(v_vkformat_color, v_swapchain_formats);
 
         if (l_supported_color_format == 0) {
-            throw std::runtime_error(
-                    "[XrProgram] No supported swapchain format for depth or color was supported!");
+            throw std::runtime_error("[XrProgram] No supported swapchain format for depth or color was supported!");
         }
 
-        for (int i = 0; i < 2; i++) {//Color swapchain
+        for (uint32_t i = 0; i < mv_views.size(); i++) {//Color swapchain
             XrSwapchainCreateInfo swapchain_color_create_info = {
                     .type = XR_TYPE_SWAPCHAIN_CREATE_INFO,
                     .createFlags = 0,
-                    .usageFlags = XR_SWAPCHAIN_USAGE_SAMPLED_BIT |
-                                  XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT,
+                    .usageFlags = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT,
                     .format = l_supported_color_format,
-                    .sampleCount = mv_view_config_views.front().recommendedSwapchainSampleCount,
-                    .width = mv_view_config_views.front().recommendedImageRectWidth, //assume same
-                    .height = mv_view_config_views.front().recommendedImageRectHeight,
+                    .sampleCount = mv_view_config_views[i].recommendedSwapchainSampleCount,
+                    .width = mv_view_config_views[i].recommendedImageRectWidth, //assume same
+                    .height = mv_view_config_views[i].recommendedImageRectHeight,
                     .faceCount = 1,
-                    .arraySize = static_cast<uint32_t>(mv_view_config_views.size()),
+                    .arraySize = 1,
                     .mipCount = 1,
             };
-            b_qualify_xr(xrCreateSwapchain(mh_xrsession, &swapchain_color_create_info,
-                                           &mv_sccolor[i].swapchain));
+            b_qualify_xr(xrCreateSwapchain(mh_xrsession, &swapchain_color_create_info, &mv_sccolor[i].swapchain));
 
             uint32_t un_swapchain_image_count;
-            b_qualify_xr(xrEnumerateSwapchainImages(mv_sccolor[i].swapchain, 0,
-                                                    &un_swapchain_image_count, nullptr));
+            b_qualify_xr(xrEnumerateSwapchainImages(mv_sccolor[i].swapchain, 0, &un_swapchain_image_count, nullptr));
 
             auto &swapchain_images = mv_sccolor[i].v_images;
-            swapchain_images.resize(un_swapchain_image_count,
-                                    {XR_TYPE_SWAPCHAIN_IMAGE_VULKAN2_KHR});
+            swapchain_images.resize(un_swapchain_image_count, {XR_TYPE_SWAPCHAIN_IMAGE_VULKAN2_KHR});
             b_qualify_xr(
-                    xrEnumerateSwapchainImages(mv_sccolor[i].swapchain, swapchain_images.size(),
-                                               &un_swapchain_image_count,
+                    xrEnumerateSwapchainImages(mv_sccolor[i].swapchain, swapchain_images.size(), &un_swapchain_image_count,
                                                reinterpret_cast<XrSwapchainImageBaseHeader *>(swapchain_images.data())));
 
             mv_sccolor[i].vk_format = static_cast<VkFormat>(l_supported_color_format);
 
-            mv_sccolor[i].extent = {mv_view_config_views.front().recommendedImageRectWidth,
-                                    mv_view_config_views.front().recommendedImageRectHeight};
+            mv_sccolor[i].extent = {mv_view_config_views[i].recommendedImageRectWidth, mv_view_config_views[i].recommendedImageRectHeight};
 
             mv_sccolor[i].v_image_views.resize(mv_sccolor[i].v_images.size());
             for (uint32_t k = 0; k < mv_sccolor[i].v_images.size(); k++) {
@@ -574,8 +566,69 @@ bool Program::BInit() {
                         }
                 };
 
-                b_qualify_vk(vkCreateImageView(mh_vkdevice, &vk_image_view_create_info, nullptr,
-                                               &mv_sccolor[i].v_image_views[k]));
+                b_qualify_vk(vkCreateImageView(mh_vkdevice, &vk_image_view_create_info, nullptr, &mv_sccolor[i].v_image_views[k]));
+            }
+        }
+
+        const std::vector<VkFormat> v_vkformat_depth = {
+                VK_FORMAT_D32_SFLOAT,
+                VK_FORMAT_D16_UNORM
+        };
+        int64_t l_supported_depth_format = GetSupportedSwapchainFormat(v_vkformat_color, v_swapchain_formats);
+
+        if (l_supported_depth_format == 0) {
+            throw std::runtime_error("[XrProgram] No supported swapchain format for depth was supported!");
+        }
+
+        for (uint32_t i = 0; i < mv_views.size(); i++) {//Depth swapchain
+            auto& sc_depth = mv_scdepth[i];
+
+            XrSwapchainCreateInfo swapchain_create_info = {
+                    .type = XR_TYPE_SWAPCHAIN_CREATE_INFO,
+                    .usageFlags = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                    .format = l_supported_depth_format,
+                    .sampleCount = mv_view_config_views[i].recommendedSwapchainSampleCount,
+                    .width = mv_view_config_views[i].recommendedImageRectWidth,
+                    .height = mv_view_config_views[i].recommendedImageRectHeight,
+                    .faceCount = 1,
+                    .arraySize = 1,
+                    .mipCount = 1,
+            };
+            b_qualify_xr(xrCreateSwapchain(mh_xrsession, &swapchain_create_info, &sc_depth.swapchain));
+
+            uint32_t un_swapchain_image_count;
+            b_qualify_xr(xrEnumerateSwapchainImages(sc_depth.swapchain, 0, &un_swapchain_image_count, nullptr));
+
+            auto &swapchain_images = sc_depth.v_images;
+            swapchain_images.resize(un_swapchain_image_count, {XR_TYPE_SWAPCHAIN_IMAGE_VULKAN2_KHR});
+            b_qualify_xr(xrEnumerateSwapchainImages(sc_depth.swapchain, swapchain_images.size(), &un_swapchain_image_count,
+                                                    reinterpret_cast<XrSwapchainImageBaseHeader *>(swapchain_images.data())));
+
+            sc_depth.vk_format = static_cast<VkFormat>(l_supported_depth_format);
+
+            sc_depth.v_image_views.resize(sc_depth.v_images.size());
+            for (uint32_t k = 0; k < sc_depth.v_images.size(); k++) {
+                VkImageViewCreateInfo image_view_create_info = {
+                        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+                        .image = sc_depth.v_images[k].image,
+                        .viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY,
+                        .format = sc_depth.vk_format,
+                        .components = {
+                                .r = VK_COMPONENT_SWIZZLE_R,
+                                .g = VK_COMPONENT_SWIZZLE_G,
+                                .b = VK_COMPONENT_SWIZZLE_B,
+                                .a = VK_COMPONENT_SWIZZLE_A
+                        },
+                        .subresourceRange = {
+                                .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+                                .baseMipLevel = 0,
+                                .levelCount = 1,
+                                .baseArrayLayer = 0,
+                                .layerCount = static_cast<uint32_t>(mv_view_config_views.size()),
+                        }
+                };
+
+                b_qualify_vk(vkCreateImageView(mh_vkdevice, &image_view_create_info, nullptr, &sc_depth.v_image_views[k]));
             }
         }
     }
@@ -753,6 +806,16 @@ bool Program::BInit() {
                 .attachmentCount = 1,
                 .pAttachments = &color_blend_attachment_state,
         };
+        VkPipelineDepthStencilStateCreateInfo depth_stencil_state_create_info = {
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+                .depthTestEnable = VK_TRUE,
+                .depthWriteEnable = VK_TRUE,
+                .depthCompareOp = VK_COMPARE_OP_LESS,
+                .depthBoundsTestEnable = VK_FALSE,
+                .stencilTestEnable = VK_FALSE,
+                .minDepthBounds = 0.f,
+                .maxDepthBounds = 1.f,
+        };
 
         VkDescriptorSetLayoutBinding descriptor_set_layout_binding = {
                 .binding = 0,
@@ -792,16 +855,34 @@ bool Program::BInit() {
                 .attachment = 0,
                 .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         };
+
+        VkAttachmentDescription depth_attachment = {
+                .format = mv_scdepth[0].vk_format,
+                .samples = VK_SAMPLE_COUNT_1_BIT,
+                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        };
+        VkAttachmentReference depth_attachment_reference = {
+                .attachment = 1,
+                .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        };
+
         VkSubpassDescription subpass_description = {
                 .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
                 .colorAttachmentCount = 1,
                 .pColorAttachments = &color_attachment_reference,
+                .pDepthStencilAttachment = &depth_attachment_reference,
         };
 
+        std::vector<VkAttachmentDescription> v_vkattachment_descriptions = {color_attachment, depth_attachment};
         VkRenderPassCreateInfo render_pass_create_info = {
                 .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-                .attachmentCount = 1,
-                .pAttachments = &color_attachment,
+                .attachmentCount = (uint32_t) v_vkattachment_descriptions.size(),
+                .pAttachments = v_vkattachment_descriptions.data(),
                 .subpassCount = 1,
                 .pSubpasses = &subpass_description,
         };
@@ -816,6 +897,7 @@ bool Program::BInit() {
                 .pViewportState = &viewport_state_create_info,
                 .pRasterizationState = &rasterization_state_create_info,
                 .pMultisampleState = &multisample_state_create_info,
+                .pDepthStencilState = &depth_stencil_state_create_info,
                 .pColorBlendState = &color_blend_state_create_info,
                 .pDynamicState = &dynamic_state_create_info,
                 .layout = mh_vkpipeline_layout,
@@ -968,15 +1050,13 @@ bool Program::BInit() {
         for (int i = 0; i < mv_views.size(); i++) {
             mv_sccolor[i].v_framebuffers.resize(mv_sccolor[i].v_images.size());
             for (size_t k = 0; k < mv_sccolor[i].v_images.size(); k++) {
-                VkImageView v_attachments[] = {
-                        mv_sccolor[i].v_image_views[k],
-                };
+                std::vector<VkImageView> v_vkattachments = {mv_sccolor[i].v_image_views[k], mv_scdepth[i].v_image_views[k]};
 
                 VkFramebufferCreateInfo frame_buffer_create_info = {
                         .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
                         .renderPass = mh_vkrender_pass,
-                        .attachmentCount = 1,
-                        .pAttachments = v_attachments,
+                        .attachmentCount = (uint32_t) v_vkattachments.size(),
+                        .pAttachments = v_vkattachments.data(),
                         .width = mv_sccolor[i].extent.width,
                         .height = mv_sccolor[i].extent.height,
                         .layers = 1,
@@ -1184,7 +1264,15 @@ void Program::Tick() {
             };
             v_qualify_vk(vkBeginCommandBuffer(mv_command_buffers[i], &command_buffer_begin_info));
 
-            VkClearValue clear_value = {{{0.f, 0.f, 0.f, 1.f}}};
+            static std::vector<VkClearValue> v_vkclear_values = {
+                    {
+                            .color = {{0.f, 0.f, 0.f, 1.f}}
+                    },
+                    {
+                            .depthStencil = {1.f, 0},
+                    }
+            };
+
             VkRenderPassBeginInfo render_pass_begin_info = {
                     .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
                     .renderPass = mh_vkrender_pass,
@@ -1193,8 +1281,8 @@ void Program::Tick() {
                             .offset = {0, 0},
                             .extent = mv_sccolor[i].extent
                     },
-                    .clearValueCount = 1,
-                    .pClearValues = &clear_value
+                    .clearValueCount = (uint32_t) v_vkclear_values.size(),
+                    .pClearValues = v_vkclear_values.data()
             };
             vkCmdBeginRenderPass(mv_command_buffers[i], &render_pass_begin_info,
                                  VK_SUBPASS_CONTENTS_INLINE);
