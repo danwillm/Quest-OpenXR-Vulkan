@@ -1239,6 +1239,7 @@ void Program::Tick() {
         };
         v_qualify_xr(xrBeginFrame(mh_xrsession, &frame_begin_info));
 
+        std::vector<XrCompositionLayerDepthInfoKHR> v_composition_layer_depth_info(mv_views.size());
         std::vector<XrCompositionLayerProjectionView> v_composition_layer_projection_views(
                 mv_views.size());
 
@@ -1313,8 +1314,24 @@ void Program::Tick() {
             v_qualify_xr(xrReleaseSwapchainImage(mv_sccolor[i].swapchain,
                                                  &swapchain_image_release_info));
 
+            v_composition_layer_depth_info[i] = {
+                    .type = XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR,
+                    .subImage = {
+                            .swapchain = mv_scdepth[i].swapchain,
+                            .imageRect = {
+                                    .offset = {0, 0},
+                                    .extent = {(int32_t) mv_scdepth[i].extent.width,
+                                               (int32_t ) mv_scdepth[i].extent.height}
+                            }
+                    },
+                    .minDepth = 0.f,
+                    .maxDepth = 1.f,
+                    .nearZ = 0.01f,
+                    .farZ = 100.f,
+            };
             v_composition_layer_projection_views[i] = {
                     .type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW,
+                    .next = &v_composition_layer_depth_info[i],
                     .pose = mv_views[i].pose,
                     .fov = mv_views[i].fov,
                     .subImage = {
